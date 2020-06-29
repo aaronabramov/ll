@@ -5,6 +5,6 @@
 ![Rust CI](https://github.com/aaronabramov/ll/workflows/Rust%20CI/badge.svg)
 
 [crates-badge]: https://img.shields.io/crates/v/ll.svg
-[crates-url]: https://crates.io/cratesll/
+[crates-url]: https://crates.io/crates/ll/
 [docs-badge]: https://docs.rs/ll/badge.svg
 [docs-url]: https://docs.rs/ll

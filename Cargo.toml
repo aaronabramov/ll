@@ -11,9 +11,11 @@ repository = "https://github.com/aaronabramov/ll"
 
 [dependencies]
 lazy_static = "1.4.0"
-k9 = "0.2"
 anyhow = "1.0.31"
 chrono = "0.4.11"
+colored = "1.9.3"
+strip-ansi-escapes = "0.1.0"
 
 [dev-dependencies]
 anyhow = "1.0.31"
+k9 = "0.2"

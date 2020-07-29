@@ -111,6 +111,11 @@ fn logger_data_test() -> Result<()> {
     l3.add_data("request_id #dontprint", 592);
     l3.event("wont_print_request_id", |_| Ok(()))?;
 
+    #[allow(clippy::redundant_clone)]
+    let mut l4 = l3.clone();
+    l4.set_event_name_prefix("my_service");
+    l4.event("wont_print_request_id", |_| Ok(()))?;
+
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
         "
@@ -120,6 +125,8 @@ fn logger_data_test() -> Result<()> {
   |      process_id: 123
   |      request_id: 234
 [<REDACTED>] wont_print_request_id                                       |     0ms
+  |      process_id: 123
+[<REDACTED>] my_service:wont_print_request_id                            |     0ms
   |      process_id: 123
 
 "
@@ -214,15 +221,20 @@ fn async_test() -> Result<()> {
 
         l.async_event("async_event", |e| async move {
             e.add_data("async_data", 5);
+            let block = async {};
+            block.await;
             Ok(())
         })
         .await?;
 
-        assert_matches_inline_snapshot!(test_drain.to_string(), "
+        assert_matches_inline_snapshot!(
+            test_drain.to_string(),
+            "
 [<REDACTED>] async_event                                                 |     0ms
   |      async_data: 5
 
-");
+"
+        );
         Ok::<(), anyhow::Error>(())
     })?;
     Ok(())

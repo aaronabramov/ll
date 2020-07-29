@@ -12,6 +12,7 @@ pub struct Logger {
     drains: Vec<Arc<dyn Drain>>,
     data: EventData,
     log_level: Level,
+    event_name_prefix: Option<String>,
 }
 
 impl Logger {
@@ -20,6 +21,7 @@ impl Logger {
             drains: vec![],
             data: EventData::empty(),
             log_level: Level::Info,
+            event_name_prefix: None,
         }
     }
 
@@ -29,6 +31,10 @@ impl Logger {
 
     pub fn set_log_level(&mut self, log_level: Level) {
         self.log_level = log_level;
+    }
+
+    pub fn set_event_name_prefix<S: Into<String>>(&mut self, prefix: S) {
+        self.event_name_prefix = Some(prefix.into());
     }
 
     pub fn add_data<K: Into<String>, V: Into<DataValue>>(&mut self, key: K, value: V) {
@@ -55,7 +61,10 @@ impl Logger {
     }
 
     fn make_event<E: Into<String>>(&self, event_name: E) -> Arc<Mutex<Event>> {
-        let (name, tags) = crate::utils::extract_tags(event_name.into());
+        let (mut name, tags) = crate::utils::extract_tags(event_name.into());
+        if let Some(prefix) = &self.event_name_prefix {
+            name = format!("{}:{}", prefix, &name);
+        }
         let level = crate::utils::extract_log_level_from_tags(&tags).unwrap_or(Level::Info);
         Arc::new(Mutex::new(Event {
             name,

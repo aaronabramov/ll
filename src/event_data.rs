@@ -1,3 +1,4 @@
+use crate::level::Level;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone)]
@@ -23,8 +24,37 @@ impl EventData {
         self.map.insert(key, data_entry);
     }
 
+    pub fn merge(&mut self, other: &EventData) {
+        for (k, v) in &other.map {
+            self.map.insert(k.clone(), v.clone());
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
+    }
+
+    // Filter out data entries that are not supposed to be logger for
+    // the set log level, based on event tags.
+    // e.g. if the event is `some_event#trace` and current level is Info,
+    // we would not want to log it.
+    pub fn filter_for_level(&mut self, level: Level) {
+        let mut to_remove = vec![];
+        for (key, entry) in &self.map {
+            let entry_log_level = crate::utils::extract_log_level_from_tags(&entry.1);
+
+            if let Some(entry_log_level) = entry_log_level {
+                if entry_log_level > level {
+                    to_remove.push(key.clone());
+                }
+            }
+        }
+
+        // as of right now BTreeMap doesn't implement `.retain()`, so we'll
+        // have to do it the old way
+        for key_to_remove in &to_remove {
+            self.map.remove(key_to_remove);
+        }
     }
 }
 

@@ -1,28 +1,37 @@
 use crate::drains::Drain;
-use crate::event_data::EventData;
+use crate::event_data::{DataValue, EventData};
 use crate::events::{Event, OngoingEvent};
 use crate::level::Level;
 use anyhow::{Context, Result};
-use std::collections::BTreeSet;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 #[derive(Clone)]
 pub struct Logger {
-    drains: Arc<RwLock<Vec<Box<dyn Drain>>>>,
-    data: Arc<RwLock<EventData>>,
+    drains: Vec<Arc<dyn Drain>>,
+    data: EventData,
+    log_level: Level,
 }
 
 impl Logger {
     pub fn new() -> Self {
         Logger {
-            drains: Arc::new(RwLock::new(vec![])),
-            data: Arc::new(RwLock::new(EventData::empty())),
+            drains: vec![],
+            data: EventData::empty(),
+            log_level: Level::Info,
         }
     }
 
-    pub fn add_drain(&self, drain: Box<dyn Drain>) {
-        self.drains.write().expect("poisoned lock").push(drain);
+    pub fn add_drain(&mut self, drain: Arc<dyn Drain>) {
+        self.drains.push(drain);
+    }
+
+    pub fn set_log_level(&mut self, log_level: Level) {
+        self.log_level = log_level;
+    }
+
+    pub fn add_data<K: Into<String>, V: Into<DataValue>>(&mut self, key: K, value: V) {
+        self.data.add(key.into(), value);
     }
 
     pub fn with_event<E: Into<String>, F, T>(&self, event_name: E, f: F) -> Result<T>
@@ -43,22 +52,35 @@ impl Logger {
     }
 
     pub fn event<E: Into<String>>(&self, event_name: E) -> Event {
+        let (name, tags) = crate::utils::extract_tags(event_name.into());
+        let level = crate::utils::extract_log_level_from_tags(&tags).unwrap_or(Level::Info);
         Event {
-            name: event_name.into(),
+            name,
             data: EventData::empty(),
             discarded: false,
             duration: None,
             error_msg: None,
             is_error: false,
-            level: Level::Info,
+            level,
             started_at: SystemTime::now(),
-            tags: BTreeSet::new(),
+            tags,
         }
     }
 
-    pub fn log(&self, event: Event) {
-        let drains = self.drains.read().expect("poisoned lock");
-        for drain in drains.iter() {
+    pub fn log(&self, mut event: Event) {
+        if event.discarded {
+            return;
+        }
+        event.discarded = true;
+
+        if event.level > self.log_level {
+            return;
+        }
+
+        event.data.merge(&self.data);
+        event.data.filter_for_level(self.log_level);
+
+        for drain in self.drains.iter() {
             drain.log_event(&event);
         }
     }

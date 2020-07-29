@@ -3,7 +3,8 @@ use crate::event_data::{DataValue, EventData};
 use crate::events::{Event, OngoingEvent};
 use crate::level::Level;
 use anyhow::{Context, Result};
-use std::sync::Arc;
+use std::future::Future;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 #[derive(Clone)]
@@ -34,27 +35,29 @@ impl Logger {
         self.data.add(key.into(), value);
     }
 
-    pub fn with_event<E: Into<String>, F, T>(&self, event_name: E, f: F) -> Result<T>
+    pub fn event<E: Into<String>, F, T>(&self, event_name: E, f: F) -> Result<T>
     where
-        F: FnOnce(&OngoingEvent) -> Result<T>,
+        F: FnOnce(OngoingEvent) -> Result<T>,
     {
-        let e = self.event(event_name.into()).into();
-
-        let result = f(&e);
-        let mut event = e.event.into_inner().expect("poisoned mutex");
-        event.duration = event.started_at.elapsed().ok();
-        if result.is_err() {
-            event.is_error = true;
-        }
-        let result = add_context(result, &event);
-        self.log(event);
-        result
+        let e = self.make_event(event_name.into());
+        let result = f(e.clone().into());
+        self.after_fn(result, e)
     }
 
-    pub fn event<E: Into<String>>(&self, event_name: E) -> Event {
+    pub async fn async_event<E: Into<String>, FN, FT, T>(&self, event_name: E, f: FN) -> Result<T>
+    where
+        FN: FnOnce(OngoingEvent) -> FT,
+        FT: Future<Output = Result<T>>,
+    {
+        let e = self.make_event(event_name.into());
+        let result = f(e.clone().into()).await;
+        self.after_fn(result, e)
+    }
+
+    fn make_event<E: Into<String>>(&self, event_name: E) -> Arc<Mutex<Event>> {
         let (name, tags) = crate::utils::extract_tags(event_name.into());
         let level = crate::utils::extract_log_level_from_tags(&tags).unwrap_or(Level::Info);
-        Event {
+        Arc::new(Mutex::new(Event {
             name,
             data: EventData::empty(),
             discarded: false,
@@ -64,10 +67,10 @@ impl Logger {
             level,
             started_at: SystemTime::now(),
             tags,
-        }
+        }))
     }
 
-    pub fn log(&self, mut event: Event) {
+    pub fn log(&self, event: &mut Event) {
         if event.discarded {
             return;
         }
@@ -84,16 +87,22 @@ impl Logger {
             drain.log_event(&event);
         }
     }
-}
 
-fn add_context<T>(result: Result<T>, event: &Event) -> Result<T> {
-    if result.is_err() {
-        let mut context = format!("[inside event] {}", &event.name);
-        if !event.data.is_empty() {
-            context.push_str(&format!("\n  {}", &event.data));
+    fn after_fn<T>(&self, mut result: Result<T>, e: Arc<Mutex<Event>>) -> Result<T> {
+        let mut event = e.lock().expect("poisoned lock");
+        event.duration = event.started_at.elapsed().ok();
+        if result.is_err() {
+            event.is_error = true;
         }
-        result.context(context)
-    } else {
+        if result.is_err() {
+            let mut context = format!("[inside event] {}", &event.name);
+            if !event.data.is_empty() {
+                context.push_str(&format!("\n  {}", &event.data));
+            }
+            result = result.context(context)
+        };
+
+        self.log(&mut event);
         result
     }
 }

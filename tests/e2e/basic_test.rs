@@ -16,19 +16,19 @@ fn setup() -> (Logger, TestDrain) {
 fn basic_events_test() -> Result<()> {
     let (l, test_drain) = setup();
 
-    l.with_event("test", |_e| {
+    l.event("test", |_e| {
         let _r = 1 + 1;
         Ok(())
     })?;
 
-    l.with_event("test_with_data", |e| {
+    l.event("test_with_data", |e| {
         e.add_data("hello", "hi");
         e.add_data("int", 5);
         e.add_data("float", 5.98);
         Ok(())
     })?;
 
-    l.with_event("test_3", |_e| Ok(()))?;
+    l.event("test_3", |_e| Ok(()))?;
 
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
@@ -50,12 +50,12 @@ fn basic_events_test() -> Result<()> {
 fn error_chain_test() -> Result<()> {
     let (l, test_drain) = setup();
 
-    let result = l.with_event("top_level", |e| {
+    let result = l.event("top_level", |e| {
         e.add_data("top_level_data", 5);
 
-        l.with_event("1_level", |e2| {
+        l.event("1_level", |e2| {
             e2.add_data("1_level_data", 9);
-            l.with_event("2_level", |_| {
+            l.event("2_level", |_| {
                 anyhow::ensure!(false, "oh noes, this fails");
                 Ok(())
             })
@@ -99,17 +99,17 @@ fn logger_data_test() -> Result<()> {
 
     l.add_data("process_id", 123);
 
-    l.with_event("has_process_id", |_| Ok(()))?;
+    l.event("has_process_id", |_| Ok(()))?;
 
     #[allow(clippy::redundant_clone)]
     let mut l2 = l.clone();
     l2.add_data("request_id", 234);
-    l2.with_event("has_process_and_request_id", |_| Ok(()))?;
+    l2.event("has_process_and_request_id", |_| Ok(()))?;
 
     #[allow(clippy::redundant_clone)]
     let mut l3 = l2.clone();
     l3.add_data("request_id #dontprint", 592);
-    l3.with_event("wont_print_request_id", |_| Ok(()))?;
+    l3.event("wont_print_request_id", |_| Ok(()))?;
 
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
@@ -132,12 +132,12 @@ fn log_levels_test() -> Result<()> {
     let (mut l, test_drain) = setup();
 
     l.set_log_level(Level::Trace);
-    l.with_event("level_set_to_trace", |_| Ok(()))?;
-    l.with_event("trace #trace", |_| Ok(()))?;
-    l.with_event("debug #debug", |_| Ok(()))?;
-    l.with_event("info #info", |_| Ok(()))?;
-    l.with_event("default #info", |_| Ok(()))?;
-    l.with_event("log_datadata", |e| {
+    l.event("level_set_to_trace", |_| Ok(()))?;
+    l.event("trace #trace", |_| Ok(()))?;
+    l.event("debug #debug", |_| Ok(()))?;
+    l.event("info #info", |_| Ok(()))?;
+    l.event("default #info", |_| Ok(()))?;
+    l.event("log_datadata", |e| {
         e.add_data("data_trace #trace", true);
         e.add_data("data_debug #debug", true);
         e.add_data("data_info #info", true);
@@ -146,12 +146,12 @@ fn log_levels_test() -> Result<()> {
     })?;
 
     l.set_log_level(Level::Debug);
-    l.with_event("level_set_to_debug", |_| Ok(()))?;
-    l.with_event("trace #trace", |_| Ok(()))?;
-    l.with_event("debug #debug", |_| Ok(()))?;
-    l.with_event("info #info", |_| Ok(()))?;
-    l.with_event("default #info", |_| Ok(()))?;
-    l.with_event("log_datadata", |e| {
+    l.event("level_set_to_debug", |_| Ok(()))?;
+    l.event("trace #trace", |_| Ok(()))?;
+    l.event("debug #debug", |_| Ok(()))?;
+    l.event("info #info", |_| Ok(()))?;
+    l.event("default #info", |_| Ok(()))?;
+    l.event("log_datadata", |e| {
         e.add_data("data_trace #trace", true);
         e.add_data("data_debug #debug", true);
         e.add_data("data_info #info", true);
@@ -160,12 +160,12 @@ fn log_levels_test() -> Result<()> {
     })?;
 
     l.set_log_level(Level::Info);
-    l.with_event("level_set_to_info", |_| Ok(()))?;
-    l.with_event("trace #trace", |_| Ok(()))?;
-    l.with_event("debug #debug", |_| Ok(()))?;
-    l.with_event("info #info", |_| Ok(()))?;
-    l.with_event("default #info", |_| Ok(()))?;
-    l.with_event("log_datadata", |e| {
+    l.event("level_set_to_info", |_| Ok(()))?;
+    l.event("trace #trace", |_| Ok(()))?;
+    l.event("debug #debug", |_| Ok(()))?;
+    l.event("info #info", |_| Ok(()))?;
+    l.event("default #info", |_| Ok(()))?;
+    l.event("log_datadata", |e| {
         e.add_data("data_trace #trace", true);
         e.add_data("data_debug #debug", true);
         e.add_data("data_info #info", true);
@@ -203,5 +203,27 @@ fn log_levels_test() -> Result<()> {
 
 "
     );
+    Ok(())
+}
+
+#[test]
+fn async_test() -> Result<()> {
+    let mut rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(async {
+        let (l, test_drain) = setup();
+
+        l.async_event("async_event", |e| async move {
+            e.add_data("async_data", 5);
+            Ok(())
+        })
+        .await?;
+
+        assert_matches_inline_snapshot!(test_drain.to_string(), "
+[<REDACTED>] async_event                                                 |     0ms
+  |      async_data: 5
+
+");
+        Ok::<(), anyhow::Error>(())
+    })?;
     Ok(())
 }

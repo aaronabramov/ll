@@ -1,11 +1,11 @@
 use crate::event_data::{DataValue, EventData};
 use crate::level::Level;
 use crate::types;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 pub struct OngoingEvent {
-    pub(crate) event: Mutex<Event>,
+    pub(crate) event: Arc<Mutex<Event>>,
 }
 
 impl OngoingEvent {
@@ -19,11 +19,9 @@ impl OngoingEvent {
     }
 }
 
-impl std::convert::From<Event> for OngoingEvent {
-    fn from(e: Event) -> OngoingEvent {
-        OngoingEvent {
-            event: Mutex::new(e),
-        }
+impl std::convert::From<Arc<Mutex<Event>>> for OngoingEvent {
+    fn from(event: Arc<Mutex<Event>>) -> OngoingEvent {
+        OngoingEvent { event }
     }
 }
 

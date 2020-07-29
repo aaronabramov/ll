@@ -10,12 +10,13 @@ repository = "https://github.com/aaronabramov/ll"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lazy_static = "1.4.0"
 anyhow = "1.0.31"
 chrono = "0.4.11"
 colored = "1.9.3"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 anyhow = "1.0.31"
 k9 = "0.2"
 strip-ansi-escapes = "0.1.0"
+tokio = "0.2.22"

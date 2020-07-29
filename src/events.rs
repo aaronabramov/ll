@@ -17,6 +17,10 @@ impl OngoingEvent {
         self.event.lock().unwrap().data.add(key.into(), value);
         self
     }
+
+    pub fn set_error_msg<S: Into<String>>(&self, msg: S) {
+        self.event.lock().expect("poisoned lock").error_msg = Some(msg.into());
+    }
 }
 
 impl std::convert::From<Arc<Mutex<Event>>> for OngoingEvent {

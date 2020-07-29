@@ -25,6 +25,7 @@ fn basic_events_test() -> Result<()> {
         e.add_data("hello", "hi");
         e.add_data("int", 5);
         e.add_data("float", 5.98);
+        e.set_error_msg("this is a custom error message that will be attached to Event");
         Ok(())
     })?;
 

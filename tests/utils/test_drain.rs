@@ -1,6 +1,6 @@
 use ll::drains::stdout::{make_string, TimestampFormat, DONTPRINT_TAG};
 use ll::drains::Drain;
-use ll::Event;
+use ll::events::Event;
 use std::sync::{Arc, Mutex};
 
 pub fn strip_ansi(s: &str) -> String {
@@ -41,6 +41,6 @@ impl Drain for TestDrain {
 impl std::fmt::Display for TestDrain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = self.output.lock().expect("poisoned lock");
-        write!(f, "{}", &s)
+        write!(f, "\n{}\n", &s)
     }
 }

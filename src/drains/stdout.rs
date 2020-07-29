@@ -1,5 +1,5 @@
 use super::Drain;
-use crate::Event;
+use crate::events::Event;
 use chrono::prelude::*;
 use chrono::{DateTime, Local, Utc};
 use colored::*;
@@ -59,12 +59,14 @@ pub fn make_string(event: &Event, timestamp_format: TimestampFormat) -> String {
         None => format!("{}{}", timestamp, event_name),
     };
 
+    result.push_str("\n");
+
     for (k, entry) in &event.data.map {
         if entry.1.contains(DONTPRINT_TAG) {
             continue;
         }
 
-        result.push_str(&format!("\n  |      {}: {}", k, entry.0).dimmed());
+        result.push_str(&format!("  |      {}: {}\n", k, entry.0).dimmed());
     }
 
     if let Some(error) = &event.error_msg {

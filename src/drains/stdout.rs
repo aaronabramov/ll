@@ -6,8 +6,16 @@ use colored::*;
 
 pub const DONTPRINT_TAG: &str = "dontprint";
 
-struct StdoutDrain {
+pub struct StdoutDrain {
     pub timestamp_format: Option<TimestampFormat>,
+}
+
+impl StdoutDrain {
+    pub fn new() -> Self {
+        Self {
+            timestamp_format: None,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -70,7 +78,7 @@ pub fn make_string(event: &Event, timestamp_format: TimestampFormat) -> String {
     }
 
     if let Some(error) = &event.error_msg {
-        result.push_str("\n");
+        result.push_str("  |\n");
         let error_log = error
             .split('\n')
             .map(|line| format!("  |  {}", line))

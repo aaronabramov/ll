@@ -25,6 +25,12 @@ impl Logger {
         }
     }
 
+    pub fn stdout() -> Self {
+        let mut ll = Self::new();
+        ll.add_drain(Arc::new(crate::drains::stdout::StdoutDrain::new()));
+        ll
+    }
+
     pub fn add_drain(&mut self, drain: Arc<dyn Drain>) {
         self.drains.push(drain);
     }

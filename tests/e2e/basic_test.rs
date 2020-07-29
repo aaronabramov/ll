@@ -1,8 +1,7 @@
 use crate::utils::test_drain::TestDrain;
 use anyhow::Result;
 use k9::*;
-use ll::level::Level;
-use ll::logger::Logger;
+use ll::{Level, Logger};
 use std::sync::Arc;
 
 fn setup() -> (Logger, TestDrain) {
@@ -39,6 +38,8 @@ fn basic_events_test() -> Result<()> {
   |      float: 5.98
   |      hello: hi
   |      int: 5
+  |
+  |  this is a custom error message that will be attached to Event
 [<REDACTED>] test_3                                                      |     0ms
 
 "

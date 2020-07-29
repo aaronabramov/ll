@@ -1,6 +1,5 @@
 use ll::drains::stdout::{make_string, TimestampFormat, DONTPRINT_TAG};
-use ll::drains::Drain;
-use ll::events::Event;
+use ll::{Drain, Event};
 use std::sync::{Arc, Mutex};
 
 pub fn strip_ansi(s: &str) -> String {

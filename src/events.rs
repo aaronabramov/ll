@@ -56,6 +56,9 @@ impl std::convert::From<Arc<Mutex<Event>>> for OngoingEvent {
     }
 }
 
+/// Underlying struct for the event. This struct is only interacted with publicly
+/// after the logging is done. This struct is what gets passed to every `Drain`
+/// implementation.
 #[derive(Debug)]
 pub struct Event {
     /// Name of the event, which is its main identifier

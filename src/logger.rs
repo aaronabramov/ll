@@ -9,7 +9,7 @@ use std::time::SystemTime;
 
 #[derive(Clone)]
 pub struct Logger {
-    drains: Vec<Arc<dyn Drain>>,
+    drains: Vec<Arc<dyn Drain + Send + Sync>>,
     data: EventData,
     log_level: Level,
     event_name_prefix: Option<String>,
@@ -31,7 +31,7 @@ impl Logger {
         ll
     }
 
-    pub fn add_drain(&mut self, drain: Arc<dyn Drain>) {
+    pub fn add_drain(&mut self, drain: Arc<dyn Drain + Send + Sync>) {
         self.drains.push(drain);
     }
 

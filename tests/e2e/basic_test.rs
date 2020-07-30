@@ -2,7 +2,7 @@ use crate::utils::test_drain::TestDrain;
 use anyhow::Result;
 use k9::*;
 use ll::{Level, Logger};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 fn setup() -> (Logger, TestDrain) {
     let test_drain = TestDrain::new();
@@ -248,26 +248,42 @@ fn async_test() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn doctest() {
-    struct AnalyticsDBDrain;
+#[test]
+fn custom_drain_test() {
+    let s = Arc::new(Mutex::new(String::new()));
+    struct AnalyticsDBDrain(Arc<Mutex<String>>);
 
     impl ll::Drain for AnalyticsDBDrain {
-        fn log_event(&self, _e: &ll::Event) {}
+        fn log_event(&self, e: &ll::Event) {
+            let mut s = self.0.lock().unwrap();
+            s.push_str(&e.name);
+            s.push_str(" ");
+            for (k, entry) in &e.data.map {
+                let v = &entry.0;
+                let tags = &entry.1;
+                s.push_str(&format!("{:?}", tags));
+                match v {
+                    ll::DataValue::Int(i) => s.push_str(&format!("{}: int: {}", k, i)),
+                    _ => s.push_str(&format!("{}: {:?}", k, v)),
+                }
+            }
+        }
     }
 
     let mut l = ll::Logger::stdout();
-    l.add_drain(std::sync::Arc::new(AnalyticsDBDrain));
+    let drain = Arc::new(AnalyticsDBDrain(s.clone()));
+    l.add_drain(drain);
 
-    l.event(
-        "will_be_logged_to_analytics_db_but_not_printed #dontprint",
-        |_| Ok(()),
-    )
-    .unwrap();
+    l.event("some_event #some_tag", |_| Ok(())).unwrap();
 
-    l.event("will_be_printed", |e| {
-        e.add_data("but_this_data_wont #dontprint", 1);
+    l.event("other_event", |e| {
+        e.add_data("data #dontprint", 1);
         Ok(())
     })
     .unwrap();
+
+    assert_matches_inline_snapshot!(
+        s.lock().unwrap().clone(),
+        "some_event other_event {\"dontprint\"}data: int: 1"
+    );
 }

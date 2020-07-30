@@ -35,7 +35,7 @@ impl Drain for StdoutDrain {
         let timestamp_format = self.timestamp_format.unwrap_or(TimestampFormat::UTC);
         let result = make_string(event, timestamp_format);
 
-        eprint!("{}\n", result);
+        eprint!("{}", result);
     }
 }
 

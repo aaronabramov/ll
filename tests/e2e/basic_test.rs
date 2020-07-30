@@ -30,6 +30,12 @@ fn basic_events_test() -> Result<()> {
 
     l.event("test_3", |_e| Ok(()))?;
 
+    l.event("will_be_discarded", |e| {
+        e.discard();
+        Ok(())
+    })
+    .unwrap();
+
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
         "

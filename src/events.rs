@@ -48,6 +48,11 @@ impl OngoingEvent {
         e.error_msg = Some(msg.into());
         e.is_error = true;
     }
+
+    /// Discard an event  manually. After calling this function will not be logged.
+    pub fn discard(&self) {
+        self.event.lock().unwrap().discarded = true;
+    }
 }
 
 impl std::convert::From<Arc<Mutex<Event>>> for OngoingEvent {

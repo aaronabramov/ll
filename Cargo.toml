@@ -19,4 +19,4 @@ lazy_static = "1.4.0"
 anyhow = "1.0.31"
 k9 = "0.2"
 strip-ansi-escapes = "0.1.0"
-tokio = "0.2.22"
+tokio = { version = "0.2.22", features = ["macros", "rt-threaded"] }

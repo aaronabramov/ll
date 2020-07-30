@@ -43,6 +43,8 @@ impl Logger {
         self.event_name_prefix = Some(prefix.into());
     }
 
+    /// Add key/value paris data to the logger. Every event logged from this logger
+    /// instance will have these k/v pairs associated with them.
     pub fn add_data<K: Into<String>, V: Into<DataValue>>(&mut self, key: K, value: V) {
         self.data.add(key.into(), value);
     }
@@ -85,7 +87,7 @@ impl Logger {
         }))
     }
 
-    pub fn log(&self, event: &mut Event) {
+    fn log(&self, event: &mut Event) {
         if event.discarded {
             return;
         }

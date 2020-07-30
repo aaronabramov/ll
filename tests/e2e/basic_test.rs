@@ -34,7 +34,7 @@ fn basic_events_test() -> Result<()> {
         test_drain.to_string(),
         "
 [<REDACTED>] test                                                        |     0ms
-[<REDACTED>] test_with_data                                              |     0ms
+[<REDACTED>] [ERR] test_with_data                                        |     0ms
   |      float: 5.98
   |      hello: hi
   |      int: 5
@@ -240,4 +240,28 @@ fn async_test() -> Result<()> {
         Ok::<(), anyhow::Error>(())
     })?;
     Ok(())
+}
+
+#[tokio::test]
+async fn doctest() {
+    struct AnalyticsDBDrain;
+
+    impl ll::Drain for AnalyticsDBDrain {
+        fn log_event(&self, _e: &ll::Event) {}
+    }
+
+    let mut l = ll::Logger::stdout();
+    l.add_drain(std::sync::Arc::new(AnalyticsDBDrain));
+
+    l.event(
+        "will_be_logged_to_analytics_db_but_not_printed #dontprint",
+        |_| Ok(()),
+    )
+    .unwrap();
+
+    l.event("will_be_printed", |e| {
+        e.add_data("but_this_data_wont #dontprint", 1);
+        Ok(())
+    })
+    .unwrap();
 }

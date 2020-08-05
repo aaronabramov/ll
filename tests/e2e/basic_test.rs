@@ -1,14 +1,14 @@
-use crate::utils::test_drain::TestDrain;
 use anyhow::Result;
 use k9::*;
+use ll::drains::stdout::StringDrain;
 use ll::{Level, Logger};
 use std::sync::{Arc, Mutex};
 
-fn setup() -> (Logger, TestDrain) {
-    let test_drain = TestDrain::new();
+fn setup() -> (Logger, StringDrain) {
+    let string_drain = StringDrain::new();
     let mut l = Logger::new();
-    l.add_drain(Arc::new(test_drain.clone()));
-    (l, test_drain)
+    l.add_drain(Arc::new(string_drain.clone()));
+    (l, string_drain)
 }
 
 #[test]
@@ -39,14 +39,14 @@ fn basic_events_test() -> Result<()> {
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
         "
-[<REDACTED>] test                                                        |     0ms
-[<REDACTED>] [ERR] test_with_data                                        |     0ms
+[ ] test                                                        
+[ ] [ERR] test_with_data                                        
   |      float: 5.98
   |      hello: hi
   |      int: 5
   |
   |  this is a custom error message that will be attached to Event
-[<REDACTED>] test_3                                                      |     0ms
+[ ] test_3                                                      
 
 "
     );
@@ -90,10 +90,10 @@ Caused by:
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
         "
-[<REDACTED>] [ERR] 2_level                                               |     0ms
-[<REDACTED>] [ERR] 1_level                                               |     0ms
+[ ] [ERR] 2_level                                               
+[ ] [ERR] 1_level                                               
   |      1_level_data: 9
-[<REDACTED>] [ERR] top_level                                             |     0ms
+[ ] [ERR] top_level                                             
   |      top_level_data: 5
 
 "
@@ -127,14 +127,14 @@ fn logger_data_test() -> Result<()> {
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
         "
-[<REDACTED>] has_process_id                                              |     0ms
+[ ] has_process_id                                              
   |      process_id: 123
-[<REDACTED>] has_process_and_request_id                                  |     0ms
+[ ] has_process_and_request_id                                  
   |      process_id: 123
   |      request_id: 234
-[<REDACTED>] wont_print_request_id                                       |     0ms
+[ ] wont_print_request_id                                       
   |      process_id: 123
-[<REDACTED>] my_service:wont_print_request_id                            |     0ms
+[ ] my_service:wont_print_request_id                            
   |      process_id: 123
 
 "
@@ -191,28 +191,28 @@ fn log_levels_test() -> Result<()> {
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
         "
-[<REDACTED>] level_set_to_trace                                          |     0ms
-[<REDACTED>] trace                                                       |     0ms
-[<REDACTED>] debug                                                       |     0ms
-[<REDACTED>] info                                                        |     0ms
-[<REDACTED>] default                                                     |     0ms
-[<REDACTED>] log_datadata                                                |     0ms
+[ ] level_set_to_trace                                          
+[ ] trace                                                       
+[ ] debug                                                       
+[ ] info                                                        
+[ ] default                                                     
+[ ] log_datadata                                                
   |      data_debug: true
   |      data_default: true
   |      data_info: true
   |      data_trace: true
-[<REDACTED>] level_set_to_debug                                          |     0ms
-[<REDACTED>] debug                                                       |     0ms
-[<REDACTED>] info                                                        |     0ms
-[<REDACTED>] default                                                     |     0ms
-[<REDACTED>] log_datadata                                                |     0ms
+[ ] level_set_to_debug                                          
+[ ] debug                                                       
+[ ] info                                                        
+[ ] default                                                     
+[ ] log_datadata                                                
   |      data_debug: true
   |      data_default: true
   |      data_info: true
-[<REDACTED>] level_set_to_info                                           |     0ms
-[<REDACTED>] info                                                        |     0ms
-[<REDACTED>] default                                                     |     0ms
-[<REDACTED>] log_datadata                                                |     0ms
+[ ] level_set_to_info                                           
+[ ] info                                                        
+[ ] default                                                     
+[ ] log_datadata                                                
   |      data_default: true
   |      data_info: true
 
@@ -238,7 +238,7 @@ fn async_test() -> Result<()> {
         assert_matches_inline_snapshot!(
             test_drain.to_string(),
             "
-[<REDACTED>] async_event                                                 |     0ms
+[ ] async_event                                                 
   |      async_data: 5
 
 "

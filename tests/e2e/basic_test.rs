@@ -287,3 +287,37 @@ fn custom_drain_test() {
         "some_event other_event {\"dontprint\"}data: int: 1"
     );
 }
+
+#[test]
+fn nested_loggers_test() -> Result<()> {
+    let (mut l, test_drain) = setup();
+
+    l.add_data("process_id", 123);
+    l.event("has_process_id", |_| Ok(()))?;
+
+    let l2 = l.nest("my_app");
+    l2.event("some_app_event", |_| Ok(()))?;
+
+    let mut l3 = l2.nest("db");
+    l3.add_data("db_connection_id", 234);
+    l3.event("some_db_event", |_| Ok(()))?;
+
+    l2.event("another_app_event", |_| Ok(()))?;
+
+    assert_matches_inline_snapshot!(
+        test_drain.to_string(),
+        "
+[ ] has_process_id                                              
+  |      process_id: 123
+[ ] my_app:some_app_event                                       
+  |      process_id: 123
+[ ] my_app:db:some_db_event                                     
+  |      db_connection_id: 234
+  |      process_id: 123
+[ ] my_app:another_app_event                                    
+  |      process_id: 123
+
+"
+    );
+    Ok(())
+}

@@ -43,6 +43,30 @@ impl Logger {
         self.event_name_prefix = Some(prefix.into());
     }
 
+    /// Create a nested logger that will have a prefix added to it for all events.
+    /// ```
+    /// let l = ll::Logger::new();
+    /// l.event("some_event", |_| Ok(())).unwrap();
+    /// let l2 = l.nest("my_app");
+    /// l2.event("some_app_event", |_| Ok(())).unwrap();
+    /// let l3 = l.nest("db");
+    /// l2.event("some_db_event", |_| Ok(())).unwrap();
+    ///
+    /// // Will print
+    /// // [ ] some_event
+    /// // [ ] my_app:some_app_event
+    /// // [ ] my_app:db:some_db_event
+    /// ```
+    pub fn nest(&self, prefix: impl Into<String>) -> Logger {
+        let mut nested_logger = self.clone();
+        let existing = nested_logger
+            .event_name_prefix
+            .map(|p| format!("{}:", p))
+            .unwrap_or_default();
+        nested_logger.event_name_prefix = Some(format!("{}{}", existing, prefix.into()));
+        nested_logger
+    }
+
     /// Add key/value paris data to the logger. Every event logged from this logger
     /// instance will have these k/v pairs associated with them.
     pub fn add_data<K: Into<String>, V: Into<DataValue>>(&mut self, key: K, value: V) {

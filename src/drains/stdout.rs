@@ -3,7 +3,7 @@ use crate::events::Event;
 use chrono::prelude::*;
 use chrono::{DateTime, Local, Utc};
 use colored::*;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 pub const DONTPRINT_TAG: &str = "dontprint";
 
@@ -17,6 +17,8 @@ pub struct StdoutDrain {
 #[derive(Clone)]
 pub struct StringDrain {
     pub output: Arc<Mutex<String>>,
+    timestamp_format: Arc<RwLock<TimestampFormat>>,
+    duration_format: Arc<RwLock<DurationFormat>>,
     strip_ansi: bool,
 }
 
@@ -66,8 +68,22 @@ impl StringDrain {
     pub fn new() -> Self {
         Self {
             output: Arc::new(Mutex::new(String::new())),
+            timestamp_format: Arc::new(RwLock::new(TimestampFormat::Redacted)),
+            duration_format: Arc::new(RwLock::new(DurationFormat::None)),
             strip_ansi: true,
         }
+    }
+
+    pub fn set_timestamp_format(&self, format: TimestampFormat) {
+        *self.timestamp_format.write().unwrap() = format;
+    }
+
+    pub fn log_duration(&self, enabled: bool) {
+        *self.duration_format.write().unwrap() = if enabled {
+            DurationFormat::Milliseconds
+        } else {
+            DurationFormat::None
+        };
     }
 }
 
@@ -76,7 +92,9 @@ impl Drain for StringDrain {
         if event.tags.contains(DONTPRINT_TAG) {
             return;
         }
-        let mut result = make_string(event, TimestampFormat::Redacted, DurationFormat::None);
+        let timestamp_format = *self.timestamp_format.read().unwrap();
+        let duration_format = *self.duration_format.read().unwrap();
+        let mut result = make_string(event, timestamp_format, duration_format);
         if self.strip_ansi {
             result = strip_ansi(&result);
         }

@@ -1,6 +1,9 @@
 use crate::event_data::{DataValue, EventData};
 use crate::level::Level;
 use crate::types;
+use crate::Logger;
+use anyhow::Result;
+use std::future::Future;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -53,6 +56,23 @@ impl OngoingEvent {
     pub fn discard(&self) {
         self.event.lock().unwrap().discarded = true;
     }
+
+    pub fn event<E: Into<String>, F, T>(&self, event_name: E, f: F) -> Result<T>
+    where
+        F: FnOnce(OngoingEvent) -> Result<T>,
+    {
+        let logger = self.event.lock().unwrap().logger.clone();
+        logger.event(event_name, f)
+    }
+
+    pub async fn async_event<E: Into<String>, FN, FT, T>(&self, event_name: E, f: FN) -> Result<T>
+    where
+        FN: FnOnce(OngoingEvent) -> FT,
+        FT: Future<Output = Result<T>>,
+    {
+        let logger = self.event.lock().unwrap().logger.clone();
+        logger.async_event(event_name, f).await
+    }
 }
 
 impl std::convert::From<Arc<Mutex<Event>>> for OngoingEvent {
@@ -64,7 +84,6 @@ impl std::convert::From<Arc<Mutex<Event>>> for OngoingEvent {
 /// Underlying struct for the event. This struct is only interacted with publicly
 /// after the logging is done. This struct is what gets passed to every `Drain`
 /// implementation.
-#[derive(Debug)]
 pub struct Event {
     /// Name of the event, which is its main identifier
     pub name: String,
@@ -92,4 +111,7 @@ pub struct Event {
     /// l.event("my_event #dontprint", |_| { ... });
     /// will have tags as `BTreeSet<"dontprint">`
     pub tags: types::Tags,
+    /// Reference to the logger that spawned this event so we can have
+    /// nested events started from an Event.
+    pub logger: Arc<Logger>,
 }

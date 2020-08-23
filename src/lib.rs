@@ -188,3 +188,5 @@ pub use event_data::DataValue;
 pub use events::{Event, OngoingEvent};
 pub use level::Level;
 pub use logger::Logger;
+
+pub use logger::{async_event, event};

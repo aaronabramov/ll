@@ -321,3 +321,32 @@ fn nested_loggers_test() -> Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn global_log_functions() -> Result<()> {
+    let (mut l, test_drain) = setup();
+
+    l.add_data("process_id", 123);
+    ll::event(&l, "some_event", |_| Ok(()))?;
+
+    let l2 = l.nest("hello");
+
+    ll::async_event(&l2, "async_event", |e| async move {
+        e.add_data("async_data", true);
+        Ok(())
+    })
+    .await?;
+
+    assert_matches_inline_snapshot!(
+        test_drain.to_string(),
+        "
+[ ] some_event                                                  
+  |      process_id: 123
+[ ] hello:async_event                                           
+  |      async_data: true
+  |      process_id: 123
+
+"
+    );
+    Ok(())
+}

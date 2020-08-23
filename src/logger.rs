@@ -77,9 +77,7 @@ impl Logger {
     where
         F: FnOnce(OngoingEvent) -> Result<T>,
     {
-        let e = self.make_event(event_name.into());
-        let result = f(e.clone().into());
-        self.after_fn(result, e)
+        event(self, event_name, f)
     }
 
     pub async fn async_event<E: Into<String>, FN, FT, T>(&self, event_name: E, f: FN) -> Result<T>
@@ -87,9 +85,7 @@ impl Logger {
         FN: FnOnce(OngoingEvent) -> FT,
         FT: Future<Output = Result<T>>,
     {
-        let e = self.make_event(event_name.into());
-        let result = f(e.clone().into()).await;
-        self.after_fn(result, e)
+        async_event(self, event_name, f).await
     }
 
     fn make_event<E: Into<String>>(&self, event_name: E) -> Arc<Mutex<Event>> {
@@ -146,4 +142,27 @@ impl Logger {
         self.log(&mut event);
         result
     }
+}
+
+pub fn event<E: Into<String>, F, T>(logger: &Logger, event_name: E, f: F) -> Result<T>
+where
+    F: FnOnce(OngoingEvent) -> Result<T>,
+{
+    let e = logger.make_event(event_name.into());
+    let result = f(e.clone().into());
+    logger.after_fn(result, e)
+}
+
+pub async fn async_event<E: Into<String>, FN, FT, T>(
+    logger: &Logger,
+    event_name: E,
+    f: FN,
+) -> Result<T>
+where
+    FN: FnOnce(OngoingEvent) -> FT,
+    FT: Future<Output = Result<T>>,
+{
+    let e = logger.make_event(event_name.into());
+    let result = f(e.clone().into()).await;
+    logger.after_fn(result, e)
 }

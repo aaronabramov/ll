@@ -350,3 +350,47 @@ async fn global_log_functions() -> Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn nested_events_test() -> Result<()> {
+    let (mut l, test_drain) = setup();
+
+    l.add_data("process_id", 123);
+    ll::event(&l, "some_event", |e| {
+        e.event("some_nested_event", |e| {
+            e.add_data("nested_data", true);
+            Ok(())
+        })?;
+        Ok(())
+    })?;
+
+    l.async_event("async_event", |e| async move {
+        e.add_data("async_data", true);
+        e.async_event("nested_async_event", |e| async move {
+            e.add_data("nested_async_data", false);
+            Ok(())
+        })
+        .await?;
+        Ok(())
+    })
+    .await?;
+
+    assert_matches_inline_snapshot!(
+        test_drain.to_string(),
+        "
+[ ] some_nested_event                                           
+  |      nested_data: true
+  |      process_id: 123
+[ ] some_event                                                  
+  |      process_id: 123
+[ ] nested_async_event                                          
+  |      nested_async_data: false
+  |      process_id: 123
+[ ] async_event                                                 
+  |      async_data: true
+  |      process_id: 123
+
+"
+    );
+    Ok(())
+}

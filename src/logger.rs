@@ -104,6 +104,7 @@ impl Logger {
             level,
             started_at: SystemTime::now(),
             tags,
+            logger: Arc::new(self.clone()),
         }))
     }
 

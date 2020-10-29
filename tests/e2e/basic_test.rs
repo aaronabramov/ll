@@ -94,7 +94,7 @@ Caused by:
   |  
   |  Caused by:
   |      oh noes, this fails
-  |  <disabled>
+  |  
 [ ] [ERR] 1_level                                               
   |      1_level_data: 9
   |
@@ -105,7 +105,7 @@ Caused by:
   |  Caused by:
   |      0: [inside event] 2_level
   |      1: oh noes, this fails
-  |  <disabled>
+  |  
 [ ] [ERR] top_level                                             
   |      top_level_data: 5
   |
@@ -119,7 +119,7 @@ Caused by:
   |         
   |      1: [inside event] 2_level
   |      2: oh noes, this fails
-  |  <disabled>
+  |  
 
 "
     );

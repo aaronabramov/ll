@@ -146,7 +146,7 @@ pub fn make_string(
         None => format!("{}{}", timestamp, event_name),
     };
 
-    result.push_str("\n");
+    result.push('\n');
 
     for (k, entry) in &event.data.map {
         if entry.1.contains(DONTPRINT_TAG) {
@@ -165,7 +165,7 @@ pub fn make_string(
             .join("\n")
             .red();
         result.push_str(&error_log);
-        result.push_str("\n");
+        result.push('\n');
     }
 
     result

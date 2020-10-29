@@ -13,6 +13,7 @@ pub struct Logger {
     data: EventData,
     log_level: Level,
     event_name_prefix: Option<String>,
+    log_when_event_starts: bool,
 }
 
 impl Logger {
@@ -22,6 +23,7 @@ impl Logger {
             data: EventData::empty(),
             log_level: Level::Info,
             event_name_prefix: None,
+            log_when_event_starts: false,
         }
     }
 
@@ -41,6 +43,10 @@ impl Logger {
 
     pub fn set_event_name_prefix<S: Into<String>>(&mut self, prefix: S) {
         self.event_name_prefix = Some(prefix.into());
+    }
+
+    pub fn set_log_when_event_starts(&mut self, v: bool) {
+        self.log_when_event_starts = v;
     }
 
     /// Create a nested logger that will have a prefix added to it for all events.
@@ -153,11 +159,21 @@ impl Logger {
     }
 }
 
+fn log_event_start<E: Into<String>>(logger: &Logger, event_name: E) {
+    let start_event = logger.make_event(format!("[START] {}", event_name.into()));
+    let mut event = start_event.lock().expect("poisoned lock");
+    logger.log(&mut event);
+}
+
 pub fn event<E: Into<String>, F, T>(logger: &Logger, event_name: E, f: F) -> Result<T>
 where
     F: FnOnce(OngoingEvent) -> Result<T>,
 {
-    let e = logger.make_event(event_name.into());
+    let event_name = event_name.into();
+    if logger.log_when_event_starts {
+        log_event_start(logger, &event_name);
+    }
+    let e = logger.make_event(event_name);
     let result = f(e.clone().into());
     logger.after_fn(result, e)
 }
@@ -171,7 +187,11 @@ where
     FN: FnOnce(OngoingEvent) -> FT,
     FT: Future<Output = Result<T>>,
 {
-    let e = logger.make_event(event_name.into());
+    let event_name = event_name.into();
+    if logger.log_when_event_starts {
+        log_event_start(logger, &event_name);
+    }
+    let e = logger.make_event(event_name);
     let result = f(e.clone().into()).await;
     logger.after_fn(result, e)
 }

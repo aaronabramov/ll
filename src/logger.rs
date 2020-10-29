@@ -157,7 +157,7 @@ impl Logger {
 }
 
 fn log_event_start<E: Into<String>>(logger: &Logger, event_name: E) {
-    let start_event = logger.make_event(format!("[START] {}", event_name.into()));
+    let start_event = logger.make_event(format!("{} [EVENT_START]", event_name.into()));
     let mut event = start_event.lock().expect("poisoned lock");
     logger.log(&mut event);
 }

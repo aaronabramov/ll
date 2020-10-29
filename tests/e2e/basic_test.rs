@@ -85,9 +85,9 @@ Caused by:
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
         "
-[ ] [START] top_level
-[ ] [START] 1_level
-[ ] [START] 2_level
+[ ] top_level [EVENT_START]
+[ ] 1_level [EVENT_START]
+[ ] 2_level [EVENT_START]
 [ ] [ERR] 2_level                                               
   |
   |  [inside event] 2_level

@@ -50,7 +50,8 @@ fn basic_events_test() -> Result<()> {
 
 #[test]
 fn error_chain_test() -> Result<()> {
-    let (l, test_drain) = setup();
+    let (mut l, test_drain) = setup();
+    l.set_log_when_event_starts(true);
 
     let result = l.event("top_level", |e| {
         e.add_data("top_level_data", 5);
@@ -84,6 +85,9 @@ Caused by:
     assert_matches_inline_snapshot!(
         test_drain.to_string(),
         "
+[ ] [START] top_level
+[ ] [START] 1_level
+[ ] [START] 2_level
 [ ] [ERR] 2_level                                               
   |
   |  [inside event] 2_level

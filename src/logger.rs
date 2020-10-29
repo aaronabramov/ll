@@ -140,7 +140,15 @@ impl Logger {
             result = result.context(context)
         };
 
-        self.log(&mut event);
+        // Add error message, unless something is already in there
+        if event.error_msg.is_none() {
+            event.error_msg = result
+                .as_ref()
+                .err()
+                .map(|err| format!("{:?}\n{:?}", &err, err.backtrace()));
+
+            self.log(&mut event);
+        }
         result
     }
 }

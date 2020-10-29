@@ -40,12 +40,6 @@ fn basic_events_test() -> Result<()> {
         test_drain.to_string(),
         "
 [ ] test                                                        
-[ ] [ERR] test_with_data                                        
-  |      float: 5.98
-  |      hello: hi
-  |      int: 5
-  |
-  |  this is a custom error message that will be attached to Event
 [ ] test_3                                                      
 
 "
@@ -91,10 +85,37 @@ Caused by:
         test_drain.to_string(),
         "
 [ ] [ERR] 2_level                                               
+  |
+  |  [inside event] 2_level
+  |  
+  |  Caused by:
+  |      oh noes, this fails
+  |  <disabled>
 [ ] [ERR] 1_level                                               
   |      1_level_data: 9
+  |
+  |  [inside event] 1_level
+  |      1_level_data: 9
+  |  
+  |  
+  |  Caused by:
+  |      0: [inside event] 2_level
+  |      1: oh noes, this fails
+  |  <disabled>
 [ ] [ERR] top_level                                             
   |      top_level_data: 5
+  |
+  |  [inside event] top_level
+  |      top_level_data: 5
+  |  
+  |  
+  |  Caused by:
+  |      0: [inside event] 1_level
+  |             1_level_data: 9
+  |         
+  |      1: [inside event] 2_level
+  |      2: oh noes, this fails
+  |  <disabled>
 
 "
     );
@@ -257,7 +278,7 @@ fn custom_drain_test() {
         fn log_event(&self, e: &ll::Event) {
             let mut s = self.0.lock().unwrap();
             s.push_str(&e.name);
-            s.push_str(" ");
+            s.push(' ');
             for (k, entry) in &e.data.map {
                 let v = &entry.0;
                 let tags = &entry.1;

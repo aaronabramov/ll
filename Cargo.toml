@@ -13,9 +13,9 @@ repository = "https://github.com/aaronabramov/ll"
 anyhow = "1.0"
 chrono = "0.4"
 colored = "1.9"
-lazy_static = "1.4"
+lazy_static = "1.4.0"
 strip-ansi-escapes = "0.1"
 
 [dev-dependencies]
 k9 = "0.10"
-tokio = { version = "0.2.22", features = ["macros", "rt-threaded"] }
+tokio = { version = "1", features = ["macros", "rt-threaded"] }

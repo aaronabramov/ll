@@ -36,11 +36,13 @@ fn basic_events_test() -> Result<()> {
     })
     .unwrap();
 
-    assert_matches_inline_snapshot!(
+    snapshot!(
         test_drain.to_string(),
         "
+
 [ ] test                                                        
 [ ] test_3                                                      
+
 
 "
     );
@@ -66,9 +68,10 @@ fn error_chain_test() -> Result<()> {
         Ok(())
     });
 
-    assert_matches_inline_snapshot!(
+    snapshot!(
         format!("\n{:?}\n", result.unwrap_err()),
         "
+
 [inside event] top_level
     top_level_data: 5
 
@@ -79,12 +82,14 @@ Caused by:
        
     1: [inside event] 2_level
     2: oh noes, this fails
+
 "
     );
 
-    assert_matches_inline_snapshot!(
+    snapshot!(
         test_drain.to_string(),
         "
+
 [ ] top_level [EVENT_START]
 [ ] 1_level [EVENT_START]
 [ ] 2_level [EVENT_START]
@@ -121,6 +126,7 @@ Caused by:
   |      2: oh noes, this fails
   |  
 
+
 "
     );
     Ok(())
@@ -149,9 +155,10 @@ fn logger_data_test() -> Result<()> {
     l4.set_event_name_prefix("my_service");
     l4.event("wont_print_request_id", |_| Ok(()))?;
 
-    assert_matches_inline_snapshot!(
+    snapshot!(
         test_drain.to_string(),
         "
+
 [ ] has_process_id                                              
   |      process_id: 123
 [ ] has_process_and_request_id                                  
@@ -161,6 +168,7 @@ fn logger_data_test() -> Result<()> {
   |      process_id: 123
 [ ] my_service:wont_print_request_id                            
   |      process_id: 123
+
 
 "
     );
@@ -213,9 +221,10 @@ fn log_levels_test() -> Result<()> {
         Ok(())
     })?;
 
-    assert_matches_inline_snapshot!(
+    snapshot!(
         test_drain.to_string(),
         "
+
 [ ] level_set_to_trace                                          
 [ ] trace                                                       
 [ ] debug                                                       
@@ -241,6 +250,7 @@ fn log_levels_test() -> Result<()> {
   |      data_default: true
   |      data_info: true
 
+
 "
     );
     Ok(())
@@ -260,11 +270,13 @@ fn async_test() -> Result<()> {
         })
         .await?;
 
-        assert_matches_inline_snapshot!(
+        snapshot!(
             test_drain.to_string(),
             "
+
 [ ] async_event                                                 
   |      async_data: 5
+
 
 "
         );
@@ -307,7 +319,7 @@ fn custom_drain_test() {
     })
     .unwrap();
 
-    assert_matches_inline_snapshot!(
+    snapshot!(
         s.lock().unwrap().clone(),
         "some_event other_event {\"dontprint\"}data: int: 1"
     );
@@ -329,9 +341,10 @@ fn nested_loggers_test() -> Result<()> {
 
     l2.event("another_app_event", |_| Ok(()))?;
 
-    assert_matches_inline_snapshot!(
+    snapshot!(
         test_drain.to_string(),
         "
+
 [ ] has_process_id                                              
   |      process_id: 123
 [ ] my_app:some_app_event                                       
@@ -341,6 +354,7 @@ fn nested_loggers_test() -> Result<()> {
   |      process_id: 123
 [ ] my_app:another_app_event                                    
   |      process_id: 123
+
 
 "
     );
@@ -362,14 +376,16 @@ async fn global_log_functions() -> Result<()> {
     })
     .await?;
 
-    assert_matches_inline_snapshot!(
+    snapshot!(
         test_drain.to_string(),
         "
+
 [ ] some_event                                                  
   |      process_id: 123
 [ ] hello:async_event                                           
   |      async_data: true
   |      process_id: 123
+
 
 "
     );
@@ -400,9 +416,10 @@ async fn nested_events_test() -> Result<()> {
     })
     .await?;
 
-    assert_matches_inline_snapshot!(
+    snapshot!(
         test_drain.to_string(),
         "
+
 [ ] some_nested_event                                           
   |      nested_data: true
   |      process_id: 123
@@ -414,6 +431,7 @@ async fn nested_events_test() -> Result<()> {
 [ ] async_event                                                 
   |      async_data: true
   |      process_id: 123
+
 
 "
     );

@@ -17,5 +17,5 @@ lazy_static = "1.4"
 strip-ansi-escapes = "0.1"
 
 [dev-dependencies]
-k9 = "0.2"
+k9 = "0.10"
 tokio = { version = "0.2.22", features = ["macros", "rt-threaded"] }

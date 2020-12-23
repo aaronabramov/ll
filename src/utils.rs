@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn test_tags_extraction() {
-        let mut result = String::from("\n");
+        let mut result = String::new();
 
         let events = vec![
             "some.event#dont_print",
@@ -94,7 +94,7 @@ mod tests {
             ))
         }
 
-        assert_matches_inline_snapshot!(result, "
+        snapshot!(result, "
 some.event#dont_print........................  some.event..... => dont_print......................... | None
 #dont_print..................................  #dont_print.... => ................................... | None
 another.event#dont_print#trace#dont_save.....  another.event.. => dont_print, dont_save, trace....... | Some(Trace)
@@ -105,6 +105,7 @@ fancy.event#debug............................  fancy.event.... => debug.........
 fancy.event#info.............................  fancy.event.... => info............................... | Some(Info)
 many.levels #info #debug #trace..............  many.levels.... => debug, info, trace................. | Some(Info)
 many.levels # #debug #trace..................  many.levels.... => debug, trace....................... | Some(Debug)
+
 ");
     }
 }

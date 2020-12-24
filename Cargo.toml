@@ -1,21 +1,6 @@
-[package]
-name = "ll"
-version = "0.2.9"
-authors = ["Aaron Abramov <aaron@abramov.io>"]
-edition = "2018"
-description = "rust logging library"
-license = "MIT"
-repository = "https://github.com/aaronabramov/ll"
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = "1.0"
-chrono = "0.4"
-colored = "1.9"
-lazy_static = "1.4.0"
-strip-ansi-escapes = "0.1"
-
-[dev-dependencies]
-k9 = "0.10"
-tokio = { version = "1", features = ["macros", "rt-threaded"] }
+members = [
+    "ll",
+    "ll2",
+]

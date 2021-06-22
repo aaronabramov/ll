@@ -11,7 +11,7 @@ async fn main() {
 
             let (a, b) = tokio::join!(
                 task.spawn("task_2", |task| async move {
-                    drop(task);
+                    task.create("task_2.5").await;
                     tokio::time::sleep(tokio::time::Duration::from_millis(11000)).await;
                     Ok(())
                 }),

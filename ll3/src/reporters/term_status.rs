@@ -17,6 +17,19 @@ impl TermStatus {
     }
 }
 
+/*
+ Vec of indentations. Bool represents whether a vertical line needs to be
+ at every point of the indentation, e.g.
+
+    [▶] Root Task
+    │
+    ├ [✓] Task 1
+    │  ╰ [▶] Task 3        <-- vec[true, true] has line
+    ╰ [✓] Task 1
+       ╰ [⨯] Failed task   <-- vec[false, true] no line
+*/
+type Depth = Vec<bool>;
+
 #[derive(Clone)]
 pub struct TermStatusInternal {
     current_height: usize,
@@ -33,80 +46,46 @@ impl TermStatusInternal {
         let mut t2 = t.clone();
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 t2.print().await.ok();
             }
         });
         t
     }
-    // async fn spawn<F, FT, T>(&self, name: &str, f: F) -> Result<T>
-    // where
-    //     F: FnOnce(Task) -> FT,
-    //     FT: Future<Output = Result<T>> + Send + 'static,
-    //     T: Send + 'static,
-    // {
-    //     self.spawn_internal(name, f, None).await
-    // }
-
-    // async fn spawn_internal<F, FT, T>(&self, name: &str, f: F, parent: Option<UniqID>) -> Result<T>
-    // where
-    //     F: FnOnce(Task) -> FT,
-    //     FT: Future<Output = Result<T>> + Send + 'static,
-    //     T: Send + 'static,
-    // {
-    //     let mut status = self.0.write().await;
-    //     let task_internal = TaskInternal::new(name);
-    //     let id = task_internal.id;
-
-    //     if let Some(parent) = parent {
-    //         let parent = status
-    //             .tasks_internal
-    //             .get_mut(&parent)
-    //             .context("parent must be there")?;
-    //         parent.subtasks.insert(id);
-    //     }
-
-    //     let task = task_internal.task(self);
-    //     status.tasks_internal.insert(id, task_internal);
-    //     drop(status);
-    //     let result = tokio::spawn(f(task)).await?;
-    //     let mut status = self.0.write().await;
-
-    //     let task_internal = status
-    //         .tasks_internal
-    //         .get_mut(&id)
-    //         .context("Task must be present in the tree")?;
-
-    //     let tast_status = match result.is_ok() {
-    //         true => TaskResult::Success,
-    //         false => TaskResult::Failure,
-    //     };
-    //     task_internal.status = TaskStatus::Finished(tast_status, SystemTime::now());
-
-    //     result.with_context(|| format!("Failed to execute task `{}`", name))
-    // }
 
     async fn print(&mut self) -> Result<()> {
         let tree = self.task_tree.0.read().await;
 
         let child_to_parents = tree.child_to_parents();
         let parent_to_children = tree.parent_to_children();
-        type Depth = usize;
+
         let mut stack: Vec<(UniqID, Depth)> = tree
             .root_tasks()
             .iter()
             .filter(|id| !child_to_parents.contains_key(id))
-            .map(|id| (*id, 0))
+            .map(|id| (*id, vec![]))
             .collect();
 
         let mut rows = vec![];
         while let Some((id, depth)) = stack.pop() {
             let task = tree.get_task(id).context("must be present")?;
-            rows.push(self.task_row(task, depth)?);
 
-            for subtask_id in parent_to_children.get(&id).into_iter().flatten() {
-                stack.push((*subtask_id, depth + 1));
+            let mut children_iter = parent_to_children.get(&id).into_iter().flatten().peekable();
+            let mut append_to_stack = vec![];
+
+            while let Some(subtask_id) = children_iter.next() {
+                let mut new_depth = depth.clone();
+                new_depth.push(children_iter.peek().is_some());
+                append_to_stack.push((*subtask_id, new_depth));
             }
+
+            // Since we're popping, we'll be going through children in reverse order,
+            // so we need to counter that.
+            append_to_stack.reverse();
+
+            stack.append(&mut append_to_stack);
+
+            rows.push(self.task_row(task, depth)?);
         }
 
         let height = rows.len();
@@ -122,12 +101,43 @@ impl TermStatusInternal {
         Ok(())
     }
 
-    fn task_row(&self, task_internal: &TaskInternal, depth: usize) -> Result<String> {
-        let indent = "  ".repeat(depth);
+    fn task_row(&self, task_internal: &TaskInternal, mut depth: Depth) -> Result<String> {
+        /*
+
+        [▶] Root Task
+        │
+        ├ [✓] Task 1
+        │  ╰ [▶] Task 3
+        ├ [✓] Task 1
+        ╰ [⨯] Failed task
+        */
+
+        let indent = if let Some(last_indent) = depth.pop() {
+            // Wrost case utf8 symbol pre level is 4 bytes
+            let mut indent = String::with_capacity(4 * depth.len());
+            for (i, has_vertical_line) in depth.into_iter().enumerate() {
+                if has_vertical_line {
+                    indent.push_str("│ ");
+                } else {
+                    indent.push_str("  ");
+                }
+            }
+
+            if last_indent {
+                indent.push_str("├ ");
+            } else {
+                indent.push_str("╰ ");
+            }
+
+            indent
+        } else {
+            String::new()
+        };
+
         let status = match task_internal.status {
-            TaskStatus::Running => "[ RUNS ]".black().on_yellow(),
-            TaskStatus::Finished(TaskResult::Success, _) => "[  OK  ]".black().on_green(),
-            TaskStatus::Finished(TaskResult::Failure, _) => "[ FAIL ]".on_red(),
+            TaskStatus::Running => " ▶ ".black().on_yellow(),
+            TaskStatus::Finished(TaskResult::Success, _) => " ✓ ".black().on_green(),
+            TaskStatus::Finished(TaskResult::Failure, _) => " x ".on_red(),
         };
 
         let duration = match task_internal.status {
@@ -137,7 +147,7 @@ impl TermStatusInternal {
             _ => task_internal.started_at.elapsed(),
         }?;
 
-        let indent_len = depth * 2;
+        let indent_len = indent.len();
         Ok(format!(
             "{}{} {}{}{:?}\n",
             indent,

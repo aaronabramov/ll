@@ -1,11 +1,11 @@
 use crate::uniq_id::UniqID;
 use std::time::SystemTime;
 
-pub(crate) struct TaskInternal {
-    pub(crate) name: String,
-    pub(crate) id: UniqID,
-    pub(crate) started_at: SystemTime,
-    pub(crate) status: TaskStatus,
+pub struct TaskInternal {
+    pub id: UniqID,
+    pub name: String,
+    pub started_at: SystemTime,
+    pub status: TaskStatus,
 }
 
 pub enum TaskStatus {

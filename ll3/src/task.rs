@@ -1,4 +1,4 @@
-use crate::task_tree::TaskTree;
+use crate::task_tree::{TaskTree, TASK_TREE};
 use crate::uniq_id::UniqID;
 use anyhow::Result;
 use std::future::Future;
@@ -13,8 +13,7 @@ pub struct Task {
 
 impl Task {
     pub async fn create_new(name: &str) -> Self {
-        let tree = TaskTree::new();
-        tree.create_task_internal(name, None).await
+        TASK_TREE.create_task_internal(name, None).await
     }
 
     pub async fn create(&self, name: &str) -> Self {
@@ -32,8 +31,7 @@ impl Task {
         FT: Future<Output = Result<T>> + Send + 'static,
         T: Send + 'static,
     {
-        let tree = TaskTree::new();
-        tree.spawn_internal(name, f, None).await
+        TASK_TREE.spawn_internal(name, f, None).await
     }
 
     pub async fn spawn<F, FT, T>(&self, name: &str, f: F) -> Result<T>
@@ -51,11 +49,10 @@ impl Drop for Task {
         if self.mark_done_on_drop {
             let task_tree = self.task_tree.clone();
             let id = self.id;
-            tokio::spawn(async move {
-                if let Ok(task_internal) = task_tree.0.write().await.get_task_mut(id) {
-                    task_internal.mark_done(true)
-                }
-            });
+            let mut lock = task_tree.0.write().unwrap();
+            if let Ok(task_internal) = lock.get_task_mut(id) {
+                task_internal.mark_done(true)
+            }
         }
     }
 }

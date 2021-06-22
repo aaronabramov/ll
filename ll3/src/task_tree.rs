@@ -5,10 +5,10 @@ use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::RwLock;
 
 lazy_static::lazy_static! {
-    static ref TASK_TREE: Arc<RwLock<BTreeMap<UniqID, ()>>>  = Arc::new(RwLock::new(BTreeMap::new()));
+    pub(crate) static ref TASK_TREE: TaskTree  = TaskTree::new();
 }
 
 #[derive(Clone, Default)]
@@ -39,9 +39,7 @@ impl TaskTree {
             task_tree: self.clone(),
             mark_done_on_drop: true,
         };
-        let id = task_internal.id;
-        let mut tree = self.0.write().await;
-        tree.add_task(task_internal, parent);
+        self.add_task(task_internal, parent);
         task
     }
 
@@ -64,37 +62,36 @@ impl TaskTree {
         };
         let id = task_internal.id;
 
-        let mut tree = self.0.write().await;
-        tree.add_task(task_internal, parent);
-        drop(tree);
+        self.add_task(task_internal, parent);
 
         let result = tokio::spawn(f(task)).await?;
 
-        let mut tree = self.0.write().await;
+        let mut tree = self.0.write().unwrap();
         tree.get_task_mut(id)?.mark_done(result.is_ok());
 
         result.with_context(|| format!("Failed to execute task `{}`", name.into()))
     }
-}
 
-impl TaskTreeInternal {
-    pub fn add_task(&mut self, task_internal: TaskInternal, parent: Option<UniqID>) {
+    pub fn add_task(&self, task_internal: TaskInternal, parent: Option<UniqID>) {
+        let mut tree = self.0.write().unwrap();
         let id = task_internal.id;
-        self.tasks_internal.insert(id, task_internal);
+        tree.tasks_internal.insert(id, task_internal);
         if let Some(parent) = parent {
-            self.parent_to_children
+            tree.parent_to_children
                 .entry(parent)
                 .or_insert_with(BTreeSet::new)
                 .insert(id);
-            self.child_to_parents
+            tree.child_to_parents
                 .entry(id)
                 .or_insert_with(BTreeSet::new)
                 .insert(parent);
         } else {
-            self.root_tasks.insert(id);
+            tree.root_tasks.insert(id);
         }
     }
+}
 
+impl TaskTreeInternal {
     pub fn get_task_mut(&mut self, id: UniqID) -> Result<&mut TaskInternal> {
         self.tasks_internal
             .get_mut(&id)

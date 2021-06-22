@@ -1,4 +1,4 @@
-mod term_status;
+pub mod term_status;
 mod text;
 
 pub use term_status::TermStatus;

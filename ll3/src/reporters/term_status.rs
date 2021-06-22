@@ -1,19 +1,59 @@
 use crate::task_internal::{TaskInternal, TaskResult, TaskStatus};
-use crate::task_tree::TaskTree;
+use crate::task_tree::{TaskTree, TASK_TREE};
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use crossterm::{cursor, style, terminal, ExecutableCommand};
 use std::io::stdout;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::RwLock;
+
+lazy_static::lazy_static! {
+    pub static ref TERM_STATUS: TermStatus = TermStatus::new(TASK_TREE.clone());
+}
+
+pub async fn show() {
+    TERM_STATUS.show().await;
+}
+
+pub async fn hide() {
+    TERM_STATUS.hide().await;
+}
 
 #[derive(Clone)]
 pub struct TermStatus(Arc<RwLock<TermStatusInternal>>);
 
 impl TermStatus {
-    pub fn new(task: &crate::task::Task) -> Self {
-        Self(Arc::new(RwLock::new(TermStatusInternal::new(task))))
+    fn new(task_tree: TaskTree) -> Self {
+        Self(Arc::new(RwLock::new(TermStatusInternal::new(task_tree))))
+    }
+
+    pub async fn show(&self) {
+        self.0.write().unwrap().enabled = true;
+
+        let t = self.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+                let _lock = stdio::LOCK.lock().expect("poisoned lock");
+                let mut internal = t.0.write().unwrap();
+                if internal.enabled {
+                    internal.clear().ok();
+                    internal.print().ok();
+                } else {
+                    break;
+                }
+            }
+        });
+    }
+
+    pub async fn hide(&self) {
+        self.0.write().unwrap().enabled = false;
+    }
+
+    pub async fn clean(&self) -> Result<()> {
+        self.0.read().unwrap().clear()?;
+        Ok(())
     }
 }
 
@@ -34,28 +74,37 @@ type Depth = Vec<bool>;
 pub struct TermStatusInternal {
     current_height: usize,
     task_tree: TaskTree,
+    enabled: bool,
 }
 
 impl TermStatusInternal {
-    pub fn new(task: &crate::task::Task) -> Self {
-        let t = Self {
+    fn new(task_tree: TaskTree) -> Self {
+        Self {
             current_height: 0,
-            task_tree: task.task_tree.clone(),
-        };
-
-        let mut t2 = t.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                t2.print().await.ok();
-            }
-        });
-        t
+            task_tree,
+            enabled: false,
+        }
     }
 
-    async fn print(&mut self) -> Result<()> {
-        let tree = self.task_tree.0.read().await;
+    fn print(&mut self) -> Result<()> {
+        let rows = self.make_status_rows()?;
 
+        let height = rows.len();
+
+        let stdout = stdout();
+        let mut lock = stdout.lock();
+
+        self.current_height = height;
+
+        lock.execute(style::Print("\n"))?;
+        lock.execute(style::Print(rows.join("\n")))?;
+        lock.execute(style::Print("\n"))?;
+
+        Ok(())
+    }
+
+    fn make_status_rows(&self) -> Result<Vec<String>> {
+        let tree = self.task_tree.0.read().unwrap();
         let child_to_parents = tree.child_to_parents();
         let parent_to_children = tree.parent_to_children();
 
@@ -88,17 +137,7 @@ impl TermStatusInternal {
             rows.push(self.task_row(task, depth)?);
         }
 
-        let height = rows.len();
-
-        self.clear(self.current_height)?;
-        self.current_height = height;
-
-        let mut stdout = stdout();
-        for row in rows {
-            stdout.execute(style::Print(row))?;
-        }
-
-        Ok(())
+        Ok(rows)
     }
 
     fn task_row(&self, task_internal: &TaskInternal, mut depth: Depth) -> Result<String> {
@@ -149,7 +188,7 @@ impl TermStatusInternal {
 
         let indent_len = indent.len();
         Ok(format!(
-            "{}{} {}{}{:?}\n",
+            "{}{} {}{}{:?}",
             indent,
             status,
             task_internal.name,
@@ -159,14 +198,58 @@ impl TermStatusInternal {
         //
     }
 
-    fn clear(&self, height: usize) -> Result<()> {
+    fn clear(&self) -> Result<()> {
         let mut stdout = stdout();
-
-        for _ in 0..height {
-            stdout.execute(cursor::MoveUp(1))?;
+        for _ in 0..=self.current_height {
             stdout.execute(terminal::Clear(terminal::ClearType::CurrentLine))?;
+            stdout.execute(cursor::MoveUp(1))?;
         }
 
         Ok(())
+    }
+}
+
+pub mod stdio {
+    use super::TERM_STATUS;
+    use std::io::Write;
+    use std::sync::Mutex;
+
+    lazy_static::lazy_static! {
+        pub(crate) static ref LOCK: Mutex<()> = Mutex::new(());
+        pub static ref STDOUT: BufferedStdout = BufferedStdout {};
+    }
+
+    pub fn stdout() -> BufferedStdout {
+        STDOUT.clone()
+    }
+
+    #[macro_export]
+    macro_rules! println {
+        ($t:tt) => {{
+            use std::io::Write;
+            let mut stdout = $crate::reporters::term_status::stdio::stdout();
+            write!(stdout, $t).unwrap();
+            write!(stdout, "\n").unwrap();
+        }};
+    }
+
+    #[derive(Clone)]
+    pub struct BufferedStdout {}
+
+    impl Write for BufferedStdout {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            let _lock = LOCK.lock().expect("poisoned lock");
+            let mut term_status = TERM_STATUS.0.write().unwrap();
+            term_status.clear().unwrap();
+            let mut stdout = std::io::stdout();
+            let result = stdout.write(buf);
+            term_status.print().unwrap();
+            result
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            let mut stdout = std::io::stdout();
+            stdout.flush()
+        }
     }
 }

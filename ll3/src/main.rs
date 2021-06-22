@@ -1,9 +1,10 @@
+use taskstatus::println;
 use taskstatus::Task;
 
 #[tokio::main]
 async fn main() {
     let root_task = Task::create_new("root").await;
-    taskstatus::reporters::TermStatus::new(&root_task);
+    taskstatus::reporters::term_status::show().await;
 
     root_task
         .spawn("task_1", |task| async move {
@@ -18,7 +19,21 @@ async fn main() {
                 task.spawn("task_3", |task| async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis(2750)).await;
 
-                    task.spawn("task_4", |task| async move {
+                    println!(
+                        "
+                    print 
+                    big amount of some random
+                    output to stdout"
+                    );
+
+                    println!("hello");
+                    println!("hey");
+
+                    println!(
+                        "and again
+                     cause why not"
+                    );
+                    task.spawn("task_4", |_task| async move {
                         tokio::time::sleep(tokio::time::Duration::from_millis(3200)).await;
                         Ok(())
                     })

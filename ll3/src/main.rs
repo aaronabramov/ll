@@ -9,12 +9,18 @@ async fn main() {
     taskstatus::reporters::term_status::show().await;
 
     root_task
-        .spawn("task_1", |task| async move {
+        .spawn("task_1 #randomtag", |task| async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
             let (a, b) = tokio::join!(
                 task.spawn("task_2", |task| async move {
+                    task.data("hey", 1);
+                    task.data("yo", "sup");
+                    task.data("dontprint #dontprint", 4);
+
                     task.create("task_2.5").await;
+                    task.create("won't be printed #dontprint").await;
+
                     tokio::time::sleep(tokio::time::Duration::from_millis(11000)).await;
                     Ok(())
                 }),

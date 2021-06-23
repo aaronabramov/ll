@@ -1,5 +1,6 @@
+use crate::reporters::Reporter;
 use crate::task::Task;
-use crate::task_internal::TaskInternal;
+use crate::task_internal::{self, TaskInternal};
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
@@ -11,8 +12,11 @@ lazy_static::lazy_static! {
     pub(crate) static ref TASK_TREE: TaskTree  = TaskTree::new();
 }
 
-#[derive(Clone, Default)]
+pub fn add_reporter(reporter: Arc<dyn Reporter>) {
+    TASK_TREE.0.write().unwrap().reporters.push(reporter);
+}
 
+#[derive(Clone, Default)]
 pub(crate) struct TaskTree(pub(crate) Arc<RwLock<TaskTreeInternal>>);
 
 #[derive(Default)]
@@ -21,26 +25,12 @@ pub(crate) struct TaskTreeInternal {
     parent_to_children: BTreeMap<UniqID, BTreeSet<UniqID>>,
     child_to_parents: BTreeMap<UniqID, BTreeSet<UniqID>>,
     root_tasks: BTreeSet<UniqID>,
+    reporters: Vec<Arc<dyn Reporter>>,
 }
 
 impl TaskTree {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    pub async fn create_task_internal<S: Into<String>>(
-        &self,
-        name: S,
-        parent: Option<UniqID>,
-    ) -> Task {
-        let task_internal = TaskInternal::new(name.into());
-        let task = Task {
-            id: task_internal.id,
-            task_tree: self.clone(),
-            mark_done_on_drop: true,
-        };
-        self.add_task(task_internal, parent);
-        task
     }
 
     pub(crate) async fn spawn_internal<F, FT, T, S: Into<String> + Clone>(
@@ -54,25 +44,23 @@ impl TaskTree {
         FT: Future<Output = Result<T>> + Send + 'static,
         T: Send + 'static,
     {
-        let task_internal = TaskInternal::new(name.clone().into());
+        let name = name.into();
+        let id = self.create_task_internal(name.clone(), parent);
         let task = Task {
-            id: task_internal.id,
+            id,
             task_tree: self.clone(),
             mark_done_on_drop: false,
         };
-        let id = task_internal.id;
-
-        self.add_task(task_internal, parent);
 
         let result = tokio::spawn(f(task)).await?;
+        self.mark_done(id, result.as_ref().err().map(|e| format!("{:?}", e)));
 
-        let mut tree = self.0.write().unwrap();
-        tree.get_task_mut(id)?.mark_done(result.is_ok());
-
-        result.with_context(|| format!("Failed to execute task `{}`", name.into()))
+        result.with_context(|| format!("Failed to execute task `{}`", name))
     }
 
-    pub fn add_task(&self, task_internal: TaskInternal, parent: Option<UniqID>) {
+    pub fn create_task_internal<S: Into<String>>(&self, name: S, parent: Option<UniqID>) -> UniqID {
+        let task_internal = TaskInternal::new(name.into());
+        let t_arc = Arc::new(task_internal.clone());
         let mut tree = self.0.write().unwrap();
         let id = task_internal.id;
         tree.tasks_internal.insert(id, task_internal);
@@ -88,16 +76,34 @@ impl TaskTree {
         } else {
             tree.root_tasks.insert(id);
         }
+        for reporter in &tree.reporters {
+            let r = reporter.clone();
+            let t = t_arc.clone();
+            tokio::spawn(async move {
+                r.task_start(t).await;
+            });
+        }
+        id
+    }
+
+    pub fn mark_done(&self, id: UniqID, error_message: Option<String>) {
+        let mut tree = self.0.write().unwrap();
+        if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
+            task_internal.mark_done(error_message);
+            let t_arc = Arc::new(task_internal.clone());
+
+            for reporter in &tree.reporters {
+                let r = reporter.clone();
+                let t = t_arc.clone();
+                tokio::spawn(async move {
+                    r.task_end(t).await;
+                });
+            }
+        }
     }
 }
 
 impl TaskTreeInternal {
-    pub fn get_task_mut(&mut self, id: UniqID) -> Result<&mut TaskInternal> {
-        self.tasks_internal
-            .get_mut(&id)
-            .context("task must be present")
-    }
-
     pub fn get_task(&self, id: UniqID) -> Result<&TaskInternal> {
         self.tasks_internal.get(&id).context("task must be present")
     }

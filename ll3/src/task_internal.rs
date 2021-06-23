@@ -1,6 +1,7 @@
 use crate::uniq_id::UniqID;
 use std::time::SystemTime;
 
+#[derive(Clone)]
 pub struct TaskInternal {
     pub id: UniqID,
     pub name: String,
@@ -8,14 +9,16 @@ pub struct TaskInternal {
     pub status: TaskStatus,
 }
 
+#[derive(Clone)]
 pub enum TaskStatus {
     Running,
     Finished(TaskResult, SystemTime),
 }
 
+#[derive(Clone)]
 pub enum TaskResult {
     Success,
-    Failure,
+    Failure(String),
 }
 
 impl TaskInternal {
@@ -28,10 +31,10 @@ impl TaskInternal {
         }
     }
 
-    pub(crate) fn mark_done(&mut self, success: bool) {
-        let tast_status = match success {
-            true => TaskResult::Success,
-            false => TaskResult::Failure,
+    pub(crate) fn mark_done(&mut self, error_message: Option<String>) {
+        let tast_status = match error_message {
+            None => TaskResult::Success,
+            Some(msg) => TaskResult::Failure(msg),
         };
         self.status = TaskStatus::Finished(tast_status, SystemTime::now());
     }

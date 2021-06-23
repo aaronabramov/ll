@@ -176,7 +176,7 @@ impl TermStatusInternal {
         let status = match task_internal.status {
             TaskStatus::Running => " ▶ ".black().on_yellow(),
             TaskStatus::Finished(TaskResult::Success, _) => " ✓ ".black().on_green(),
-            TaskStatus::Finished(TaskResult::Failure, _) => " x ".on_red(),
+            TaskStatus::Finished(TaskResult::Failure(_), _) => " x ".on_red(),
         };
 
         let duration = match task_internal.status {
@@ -225,10 +225,10 @@ pub mod stdio {
 
     #[macro_export]
     macro_rules! println {
-        ($t:tt) => {{
+        ($($t:expr),+) => {{
             use std::io::Write;
             let mut stdout = $crate::reporters::term_status::stdio::stdout();
-            write!(stdout, $t).unwrap();
+            write!(stdout, $($t),+).unwrap();
             write!(stdout, "\n").unwrap();
         }};
     }
@@ -240,10 +240,14 @@ pub mod stdio {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
             let _lock = LOCK.lock().expect("poisoned lock");
             let mut term_status = TERM_STATUS.0.write().unwrap();
-            term_status.clear().unwrap();
+            if term_status.enabled {
+                term_status.clear().unwrap();
+            }
             let mut stdout = std::io::stdout();
             let result = stdout.write(buf);
-            term_status.print().unwrap();
+            if term_status.enabled {
+                term_status.print().unwrap();
+            }
             result
         }
 

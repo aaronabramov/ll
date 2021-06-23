@@ -7,6 +7,8 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.41"
+async-trait = "0.1.50"
+chrono = "0.4.19"
 colored = "2.0.0"
 crossterm = "0.20.0"
 lazy_static = "1.4.0"

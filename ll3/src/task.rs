@@ -13,13 +13,21 @@ pub struct Task {
 
 impl Task {
     pub async fn create_new(name: &str) -> Self {
-        TASK_TREE.create_task_internal(name, None).await
+        let id = TASK_TREE.create_task_internal(name, None);
+        Self {
+            id,
+            task_tree: TASK_TREE.clone(),
+            mark_done_on_drop: true,
+        }
     }
 
     pub async fn create(&self, name: &str) -> Self {
-        self.task_tree
-            .create_task_internal(name, Some(self.id))
-            .await
+        let id = self.task_tree.create_task_internal(name, Some(self.id));
+        Self {
+            id,
+            task_tree: self.task_tree.clone(),
+            mark_done_on_drop: true,
+        }
     }
 
     /// Spawn a new top level task, with no parent.
@@ -47,12 +55,7 @@ impl Task {
 impl Drop for Task {
     fn drop(&mut self) {
         if self.mark_done_on_drop {
-            let task_tree = self.task_tree.clone();
-            let id = self.id;
-            let mut lock = task_tree.0.write().unwrap();
-            if let Ok(task_internal) = lock.get_task_mut(id) {
-                task_internal.mark_done(true)
-            }
+            self.task_tree.mark_done(self.id, None);
         }
     }
 }

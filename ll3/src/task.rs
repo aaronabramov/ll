@@ -1,3 +1,4 @@
+use crate::data::DataValue;
 use crate::task_tree::{TaskTree, TASK_TREE};
 use crate::uniq_id::UniqID;
 use anyhow::Result;
@@ -49,6 +50,10 @@ impl Task {
         T: Send + 'static,
     {
         self.task_tree.spawn_internal(name, f, Some(self.id)).await
+    }
+
+    pub fn data<D: Into<DataValue>>(&self, name: &str, data: D) {
+        self.task_tree.add_data(self.id, name, data);
     }
 }
 

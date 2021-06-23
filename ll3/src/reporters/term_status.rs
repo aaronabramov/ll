@@ -1,3 +1,4 @@
+use super::DONTPRINT_TAG;
 use crate::task_internal::{TaskInternal, TaskResult, TaskStatus};
 use crate::task_tree::{TaskTree, TASK_TREE};
 use crate::uniq_id::UniqID;
@@ -119,22 +120,39 @@ impl TermStatusInternal {
         while let Some((id, depth)) = stack.pop() {
             let task = tree.get_task(id).context("must be present")?;
 
-            let mut children_iter = parent_to_children.get(&id).into_iter().flatten().peekable();
+            let dontprint = task.tags.contains(DONTPRINT_TAG);
+
+            let children_iter = parent_to_children.get(&id).into_iter().flatten().peekable();
             let mut append_to_stack = vec![];
 
-            while let Some(subtask_id) = children_iter.next() {
+            let last_visible_child = children_iter
+                .clone()
+                .filter(|id| {
+                    tree.get_task(**id)
+                        .map_or(false, |t| !t.tags.contains(DONTPRINT_TAG))
+                })
+                .last();
+
+            // we still need to DFS the ones that we don't print to make sure
+            // we're not skipping their children
+            for subtask_id in children_iter {
                 let mut new_depth = depth.clone();
-                new_depth.push(children_iter.peek().is_some());
+                // If we're not printing it, we're not adding the indent either
+                // so this tasks children will become children of the parnet task
+                if !dontprint {
+                    new_depth.push(Some(subtask_id) != last_visible_child);
+                }
                 append_to_stack.push((*subtask_id, new_depth));
             }
 
             // Since we're popping, we'll be going through children in reverse order,
             // so we need to counter that.
             append_to_stack.reverse();
-
             stack.append(&mut append_to_stack);
 
-            rows.push(self.task_row(task, depth)?);
+            if !dontprint {
+                rows.push(self.task_row(task, depth)?);
+            }
         }
 
         Ok(rows)

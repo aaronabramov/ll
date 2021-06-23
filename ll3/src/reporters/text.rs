@@ -1,3 +1,4 @@
+use super::DONTPRINT_TAG;
 use crate::task_internal::TaskInternal;
 use crate::task_internal::{TaskResult, TaskStatus};
 use chrono::prelude::*;
@@ -6,8 +7,6 @@ use colored::*;
 use std::sync::{Arc, Mutex, RwLock};
 
 use super::Reporter;
-
-pub const DONTPRINT_TAG: &str = "dontprint";
 
 /// Simple drain that logs everything into STDOUT
 pub struct StdoutReporter {
@@ -49,9 +48,9 @@ pub enum DurationFormat {
 #[async_trait::async_trait]
 impl Reporter for StdoutReporter {
     async fn task_end(&self, task_internal: Arc<TaskInternal>) {
-        // if event.tags.contains(DONTPRINT_TAG) {
-        //     return;
-        // }
+        if task_internal.tags.contains(DONTPRINT_TAG) {
+            return;
+        }
 
         let timestamp_format = self.timestamp_format.unwrap_or(TimestampFormat::UTC);
         let result = make_string(
@@ -98,9 +97,9 @@ impl StringReporter {
 #[async_trait::async_trait]
 impl Reporter for StringReporter {
     async fn task_end(&self, task_internal: Arc<TaskInternal>) {
-        // if task_internal.tags.contains(DONTPRINT_TAG) {
-        //     return;
-        // }
+        if task_internal.tags.contains(DONTPRINT_TAG) {
+            return;
+        }
         let timestamp_format = *self.timestamp_format.read().unwrap();
         let duration_format = *self.duration_format.read().unwrap();
         let mut result = make_string(&task_internal, timestamp_format, duration_format);
@@ -164,15 +163,19 @@ pub fn make_string(
         None => format!("{}{}", timestamp, name),
     };
 
-    // result.push('\n');
+    let mut data = vec![];
+    for (k, entry) in &task_internal.data.map {
+        if entry.1.contains(DONTPRINT_TAG) {
+            continue;
+        }
 
-    // for (k, entry) in &task_internal.data.map {
-    //     if entry.1.contains(DONTPRINT_TAG) {
-    //         continue;
-    //     }
+        data.push(format!("  |      {}: {}", k, entry.0).dimmed().to_string());
+    }
 
-    //     result.push_str(&format!("  |      {}: {}\n", k, entry.0).dimmed());
-    // }
+    if !data.is_empty() {
+        result.push('\n');
+        result.push_str(&data.join("\n"));
+    }
 
     if let TaskStatus::Finished(TaskResult::Failure(error_msg), _) = &task_internal.status {
         result.push_str("  |\n");

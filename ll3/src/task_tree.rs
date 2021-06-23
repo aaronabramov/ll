@@ -1,3 +1,4 @@
+use crate::data::DataValue;
 use crate::reporters::Reporter;
 use crate::task::Task;
 use crate::task_internal::{self, TaskInternal};
@@ -59,7 +60,7 @@ impl TaskTree {
     }
 
     pub fn create_task_internal<S: Into<String>>(&self, name: S, parent: Option<UniqID>) -> UniqID {
-        let task_internal = TaskInternal::new(name.into());
+        let task_internal = TaskInternal::new(name);
         let t_arc = Arc::new(task_internal.clone());
         let mut tree = self.0.write().unwrap();
         let id = task_internal.id;
@@ -99,6 +100,13 @@ impl TaskTree {
                     r.task_end(t).await;
                 });
             }
+        }
+    }
+
+    pub fn add_data<S: Into<String>, D: Into<DataValue>>(&self, id: UniqID, key: S, value: D) {
+        let mut tree = self.0.write().unwrap();
+        if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
+            task_internal.data.add(key, value);
         }
     }
 }

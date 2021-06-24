@@ -106,14 +106,16 @@ impl Reporter for StringReporter {
         if self.strip_ansi {
             result = strip_ansi(&result);
         }
-        self.output.lock().expect("poisoned lock").push_str(&result);
+        let mut output = self.output.lock().expect("poisoned lock");
+        output.push_str(&result);
+        output.push('\n');
     }
 }
 
 impl std::fmt::Display for StringReporter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = self.output.lock().expect("poisoned lock");
-        write!(f, "\n{}\n", &s)
+        write!(f, "{}", &s)
     }
 }
 

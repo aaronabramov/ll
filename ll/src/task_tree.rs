@@ -17,11 +17,11 @@ lazy_static::lazy_static! {
 }
 
 pub fn add_reporter(reporter: Arc<dyn Reporter>) {
-    TASK_TREE.0.write().unwrap().reporters.push(reporter);
+    TASK_TREE.add_reporter(reporter);
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct TaskTree(pub(crate) Arc<RwLock<TaskTreeInternal>>);
+pub struct TaskTree(pub(crate) Arc<RwLock<TaskTreeInternal>>);
 
 #[derive(Default)]
 pub(crate) struct TaskTreeInternal {
@@ -69,6 +69,19 @@ impl TaskTree {
             }
         });
         s
+    }
+
+    pub fn create_task(&self, name: &str) -> Task {
+        let id = self.create_task_internal(name, None);
+        Task {
+            id,
+            task_tree: self.clone(),
+            mark_done_on_drop: true,
+        }
+    }
+
+    pub fn add_reporter(&self, reporter: Arc<dyn Reporter>) {
+        self.0.write().unwrap().reporters.push(reporter);
     }
 
     fn pre_spawn(&self, name: String, parent: Option<UniqID>) -> Task {

@@ -1,5 +1,5 @@
 pub mod term_status;
-mod text;
+pub mod text;
 
 use crate::task_tree::TaskInternal;
 use std::sync::Arc;

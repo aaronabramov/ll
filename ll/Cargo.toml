@@ -1,22 +1,20 @@
 [package]
 name = "ll"
-version = "0.2.9"
-authors = ["Aaron Abramov <aaron@abramov.io>"]
+version = "1.0.0"
 edition = "2018"
-description = "rust logging library"
-license = "MIT"
-repository = "https://github.com/aaronabramov/ll"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0"
-chrono = "0.4"
-colored = "1.9"
+anyhow = "1.0.41"
+async-trait = "0.1.50"
+chrono = "0.4.19"
+colored = "2.0.0"
+crossterm = "0.20.0"
 lazy_static = "1.4.0"
-strip-ansi-escapes = "0.1"
-rand = "0.8.0"
+strip-ansi-escapes = "0.1.0"
+term_size = "0.3.2"
+tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
-k9 = "0.10"
-tokio = { version = "1", features = ["full"] }
+k9 = "0.11.0"

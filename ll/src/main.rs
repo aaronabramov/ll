@@ -1,15 +1,27 @@
+use ll::Task;
 use std::sync::Arc;
-use taskstatus::Task;
 
 #[tokio::main]
 async fn main() {
-    taskstatus::add_reporter(Arc::new(taskstatus::reporters::StdoutReporter::new()));
+    ll::add_reporter(Arc::new(ll::reporters::StdoutReporter::new()));
     let root_task = Task::create_new("root").await;
-    taskstatus::reporters::term_status::show().await;
+    ll::reporters::term_status::show().await;
 
     root_task
         .spawn("task_1 #randomtag", |task| async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+            let task = Arc::new(task);
+            let t_clone = task.clone();
+
+            tokio::spawn(async move {
+                t_clone
+                    .spawn("detached_async_task", |_| async move {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(8400)).await;
+                        Ok(())
+                    })
+                    .await
+                    .ok();
+            });
 
             let (a, b) = tokio::join!(
                 task.spawn("task_2", |task| async move {
@@ -17,8 +29,8 @@ async fn main() {
                     task.data("yo", "sup");
                     task.data("dontprint #dontprint", 4);
 
-                    task.create("task_2.5").await;
-                    task.create("won't be printed #dontprint").await;
+                    task.create("task_2.5");
+                    task.create("won't be printed #dontprint");
 
                     tokio::time::sleep(tokio::time::Duration::from_millis(11000)).await;
                     Ok(())
@@ -27,20 +39,6 @@ async fn main() {
                     tokio::time::sleep(tokio::time::Duration::from_millis(2750)).await;
                     task.data_transitive("transitive", 555);
 
-                    // println!(
-                    //     "
-                    // print
-                    // big amount of some random
-                    // output to stdout"
-                    // );
-
-                    // println!("hello");
-                    // println!("hey");
-
-                    // println!(
-                    //     "and again
-                    //  cause why not"
-                    // );
                     task.spawn("task_4", |task| async move {
                         task.spawn("will_error", |task| async move {
                             task.spawn_sync("hello", |_task| Ok(()))?;
@@ -74,7 +72,8 @@ async fn main() {
             Ok(())
         })
         .await
-        .unwrap();
+        .map_err(|e| ll::println!("{:?}", e))
+        .ok();
 
     drop(root_task);
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;

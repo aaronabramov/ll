@@ -1,13 +1,17 @@
 use crate::data::DataValue;
 use crate::reporters::Reporter;
 use crate::task::Task;
-use crate::task_internal::{self, TaskInternal};
+use crate::task_internal::{TaskInternal, TaskStatus};
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::time::Duration;
+use std::time::SystemTime;
+
+const REMOVE_TASK_AFTER_DONE_MS: u64 = 2000;
 
 lazy_static::lazy_static! {
     pub(crate) static ref TASK_TREE: TaskTree  = TaskTree::new();
@@ -27,11 +31,21 @@ pub(crate) struct TaskTreeInternal {
     child_to_parents: BTreeMap<UniqID, BTreeSet<UniqID>>,
     root_tasks: BTreeSet<UniqID>,
     reporters: Vec<Arc<dyn Reporter>>,
+    tasks_marked_for_deletion: HashMap<UniqID, SystemTime>,
 }
 
 impl TaskTree {
     pub fn new() -> Self {
-        Default::default()
+        let s = Self::default();
+        let clone = s.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                let mut tree = clone.0.write().unwrap();
+                tree.garbage_collect();
+            }
+        });
+        s
     }
 
     pub(crate) async fn spawn_internal<F, FT, T, S: Into<String> + Clone>(
@@ -100,6 +114,8 @@ impl TaskTree {
                     r.task_end(t).await;
                 });
             }
+
+            tree.mark_for_gc(id);
         }
     }
 
@@ -126,5 +142,61 @@ impl TaskTreeInternal {
 
     pub fn parent_to_children(&self) -> &BTreeMap<UniqID, BTreeSet<UniqID>> {
         &self.parent_to_children
+    }
+
+    fn mark_for_gc(&mut self, id: UniqID) {
+        let mut stack = vec![id];
+
+        let mut tasks_to_finished_status = BTreeMap::new();
+
+        while let Some(id) = stack.pop() {
+            if let Some(task_internal) = self.tasks_internal.get(&id) {
+                tasks_to_finished_status
+                    .insert(id, matches!(task_internal.status, TaskStatus::Finished(..)));
+            }
+        }
+
+        if tasks_to_finished_status
+            .iter()
+            .all(|(_, finished)| *finished)
+        {
+            for id in tasks_to_finished_status.keys().copied() {
+                self.tasks_marked_for_deletion
+                    .entry(id)
+                    .or_insert_with(SystemTime::now);
+            }
+
+            // This sub branch might have been holding other parent branches that
+            // weren't able to be garbage collected because of this subtree. we'll go
+            // level up and perform the same logic.
+            let parents = self.child_to_parents.get(&id).cloned().unwrap_or_default();
+            for parent_id in parents {
+                self.mark_for_gc(parent_id);
+            }
+        }
+    }
+
+    fn garbage_collect(&mut self) {
+        let mut will_delete = vec![];
+        for (id, time) in &self.tasks_marked_for_deletion {
+            if let Ok(elapsed) = time.elapsed() {
+                if elapsed > Duration::from_millis(REMOVE_TASK_AFTER_DONE_MS) {
+                    will_delete.push(*id);
+                }
+            }
+        }
+
+        for id in will_delete {
+            self.tasks_internal.remove(&id);
+            self.parent_to_children.remove(&id);
+            if let Some(parents) = self.child_to_parents.remove(&id) {
+                for parent in parents {
+                    if let Some(children) = self.parent_to_children.get_mut(&parent) {
+                        children.remove(&id);
+                    }
+                }
+            }
+            self.tasks_marked_for_deletion.remove(&id);
+        }
     }
 }

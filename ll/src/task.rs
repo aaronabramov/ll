@@ -22,7 +22,7 @@ impl Task {
         }
     }
 
-    pub async fn create(&self, name: &str) -> Self {
+    pub fn create(&self, name: &str) -> Self {
         let id = self.task_tree.create_task_internal(name, Some(self.id));
         Self {
             id,

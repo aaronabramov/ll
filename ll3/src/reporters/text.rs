@@ -31,6 +31,7 @@ impl StdoutReporter {
 }
 
 #[derive(Clone, Copy)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum TimestampFormat {
     UTC,
     Local,
@@ -163,12 +164,7 @@ pub fn make_string(
     };
 
     let mut data = vec![];
-    for (k, entry) in task_internal
-        .data
-        .map
-        .iter()
-        .chain(task_internal.data_transitive.map.iter())
-    {
+    for (k, entry) in task_internal.all_data() {
         if entry.1.contains(DONTPRINT_TAG) {
             continue;
         }
@@ -182,15 +178,13 @@ pub fn make_string(
     }
 
     if let TaskStatus::Finished(TaskResult::Failure(error_msg), _) = &task_internal.status {
-        result.push_str("  |\n");
+        result.push_str("\n  |\n");
         let error_log = error_msg
             .split('\n')
             .map(|line| format!("  |  {}", line))
             .collect::<Vec<String>>()
-            .join("\n")
-            .red();
+            .join("\n");
         result.push_str(&error_log);
-        // result.push('\n');
     }
 
     result

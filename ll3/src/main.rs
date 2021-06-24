@@ -42,13 +42,22 @@ async fn main() {
                     //  cause why not"
                     // );
                     task.spawn("task_4", |task| async move {
-                        task.spawn("will_error", |_task| async move {
+                        task.spawn("will_error", |task| async move {
+                            task.spawn_sync("hello", |_task| Ok(()))?;
+                            tokio::spawn(async move {
+                                task.spawn("will run longer that parent", |_task| async move {
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(12000))
+                                        .await;
+                                    Ok(())
+                                })
+                                .await
+                            });
+
                             anyhow::bail!("omg no i failed");
                             #[allow(unreachable_code)]
                             Ok(())
                         })
-                        .await
-                        .ok();
+                        .await?;
 
                         tokio::time::sleep(tokio::time::Duration::from_millis(3200)).await;
                         Ok(())
@@ -59,7 +68,7 @@ async fn main() {
                 }),
             );
 
-            a?;
+            a.ok();
             b?;
             tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
             Ok(())

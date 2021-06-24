@@ -1,4 +1,4 @@
-use crate::data::{Data, DataValue};
+use crate::data::{Data, DataEntry, DataValue};
 use crate::reporters::Reporter;
 use crate::task::Task;
 use crate::uniq_id::UniqID;
@@ -10,7 +10,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 use std::time::SystemTime;
 
-const REMOVE_TASK_AFTER_DONE_MS: u64 = 2000;
+const REMOVE_TASK_AFTER_DONE_MS: u64 = 5000;
 
 lazy_static::lazy_static! {
     pub(crate) static ref TASK_TREE: TaskTree  = TaskTree::new();
@@ -71,7 +71,44 @@ impl TaskTree {
         s
     }
 
-    pub(crate) async fn spawn_internal<F, FT, T, S: Into<String> + Clone>(
+    fn pre_spawn(&self, name: String, parent: Option<UniqID>) -> Task {
+        Task {
+            id: self.create_task_internal(&name, parent),
+            task_tree: self.clone(),
+            mark_done_on_drop: false,
+        }
+    }
+
+    fn post_spawn<T>(&self, id: UniqID, result: Result<T>) -> Result<T> {
+        let result = result.with_context(|| {
+            let mut desc = String::from("[Task]");
+            if let Some(task_internal) = self.get_cloned_task(id) {
+                desc.push_str(&format!(" {}", task_internal.name));
+                for (k, v) in task_internal.all_data() {
+                    desc.push_str(&format!("\n  {}: {}", k, v.0));
+                }
+                if !desc.is_empty() {
+                    desc.push('\n');
+                }
+            }
+            desc
+        });
+        self.mark_done(id, result.as_ref().err().map(|e| format!("{:?}", e)));
+        result
+    }
+
+    pub fn spawn_sync<F, T>(&self, name: &str, f: F, parent: Option<UniqID>) -> Result<T>
+    where
+        F: FnOnce(Task) -> Result<T>,
+        T: Send + 'static,
+    {
+        let task = self.pre_spawn(name.into(), parent);
+        let id = task.id;
+        let result = f(task);
+        self.post_spawn(id, result)
+    }
+
+    pub(crate) async fn spawn<F, FT, T, S: Into<String> + Clone>(
         &self,
         name: S,
         f: F,
@@ -82,18 +119,10 @@ impl TaskTree {
         FT: Future<Output = Result<T>> + Send + 'static,
         T: Send + 'static,
     {
-        let name = name.into();
-        let id = self.create_task_internal(name.clone(), parent);
-        let task = Task {
-            id,
-            task_tree: self.clone(),
-            mark_done_on_drop: false,
-        };
-
+        let task = self.pre_spawn(name.into(), parent);
+        let id = task.id;
         let result = tokio::spawn(f(task)).await?;
-        self.mark_done(id, result.as_ref().err().map(|e| format!("{:?}", e)));
-
-        result.with_context(|| format!("Failed to execute task `{}`", name))
+        self.post_spawn(id, result)
     }
 
     pub fn create_task_internal<S: Into<String>>(&self, name: S, parent: Option<UniqID>) -> UniqID {
@@ -182,6 +211,11 @@ impl TaskTree {
             task_internal.data_transitive.add(key, value);
         }
     }
+
+    fn get_cloned_task(&self, id: UniqID) -> Option<TaskInternal> {
+        let tree = self.0.read().unwrap();
+        tree.get_task(id).ok().cloned()
+    }
 }
 
 impl TaskTreeInternal {
@@ -210,6 +244,10 @@ impl TaskTreeInternal {
             if let Some(task_internal) = self.tasks_internal.get(&id) {
                 tasks_to_finished_status
                     .insert(id, matches!(task_internal.status, TaskStatus::Finished(..)));
+            }
+
+            for child_id in self.parent_to_children.get(&id).into_iter().flatten() {
+                stack.push(*child_id);
             }
         }
 
@@ -275,5 +313,14 @@ impl TaskInternal {
         }
         full_name.push_str(&self.name);
         full_name
+    }
+
+    pub fn all_data(
+        &self,
+    ) -> std::iter::Chain<
+        std::collections::btree_map::Iter<String, DataEntry>,
+        std::collections::btree_map::Iter<String, DataEntry>,
+    > {
+        self.data.map.iter().chain(self.data_transitive.map.iter())
     }
 }

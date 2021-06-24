@@ -171,7 +171,7 @@ impl TermStatusInternal {
         let indent = if let Some(last_indent) = depth.pop() {
             // Wrost case utf8 symbol pre level is 4 bytes
             let mut indent = String::with_capacity(4 * depth.len());
-            for (i, has_vertical_line) in depth.into_iter().enumerate() {
+            for has_vertical_line in depth.into_iter() {
                 if has_vertical_line {
                     indent.push_str("│ ");
                 } else {

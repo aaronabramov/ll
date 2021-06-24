@@ -25,6 +25,7 @@ async fn main() {
                 }),
                 task.spawn("task_3", |task| async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis(2750)).await;
+                    task.data_transitive("transitive", 555);
 
                     // println!(
                     //     "

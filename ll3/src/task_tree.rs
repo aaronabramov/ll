@@ -41,6 +41,7 @@ pub struct TaskInternal {
     pub started_at: SystemTime,
     pub status: TaskStatus,
     pub data: Data,
+    pub data_transitive: Data,
     pub tags: BTreeSet<String>,
 }
 
@@ -99,11 +100,13 @@ impl TaskTree {
         let mut tree = self.0.write().unwrap();
 
         let mut parent_names = vec![];
+        let mut data_transitive = Data::empty();
         let (name, tags) = crate::utils::extract_tags(name.into());
         if let Some(parent) = parent {
             if let Ok(parent_task) = tree.get_task(parent) {
                 parent_names = parent_task.parent_names.clone();
                 parent_names.push(parent_task.name.clone());
+                data_transitive = parent_task.data_transitive.clone();
             }
         }
 
@@ -114,6 +117,7 @@ impl TaskTree {
             id: UniqID::new(),
             started_at: SystemTime::now(),
             data: Data::empty(),
+            data_transitive,
             tags,
         };
 
@@ -164,6 +168,18 @@ impl TaskTree {
         let mut tree = self.0.write().unwrap();
         if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
             task_internal.data.add(key, value);
+        }
+    }
+
+    pub fn add_data_transitive<S: Into<String>, D: Into<DataValue>>(
+        &self,
+        id: UniqID,
+        key: S,
+        value: D,
+    ) {
+        let mut tree = self.0.write().unwrap();
+        if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
+            task_internal.data_transitive.add(key, value);
         }
     }
 }

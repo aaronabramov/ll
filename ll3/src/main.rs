@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use taskstatus::println;
 use taskstatus::Task;
 
 #[tokio::main]
@@ -41,7 +40,15 @@ async fn main() {
                     //     "and again
                     //  cause why not"
                     // );
-                    task.spawn("task_4", |_task| async move {
+                    task.spawn("task_4", |task| async move {
+                        task.spawn("will_error", |_task| async move {
+                            anyhow::bail!("omg no i failed");
+                            #[allow(unreachable_code)]
+                            Ok(())
+                        })
+                        .await
+                        .ok();
+
                         tokio::time::sleep(tokio::time::Duration::from_millis(3200)).await;
                         Ok(())
                     })

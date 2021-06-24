@@ -1,6 +1,5 @@
 use super::DONTPRINT_TAG;
-use crate::task_internal::TaskInternal;
-use crate::task_internal::{TaskResult, TaskStatus};
+use crate::task_tree::{TaskInternal, TaskResult, TaskStatus};
 use chrono::prelude::*;
 use chrono::{DateTime, Local, Utc};
 use colored::*;
@@ -126,13 +125,13 @@ pub fn make_string(
         TimestampFormat::None => format!(""),
         TimestampFormat::Redacted => "[ ] ".to_string(), // for testing
         TimestampFormat::Local => {
-            let datetime: DateTime<Local> = task_internal.started_at.clone().into();
+            let datetime: DateTime<Local> = task_internal.started_at.into();
             let rounded = datetime.round_subsecs(0);
             let formatted = rounded.format("%I:%M:%S%p");
             format!("[{}] ", formatted).dimmed().to_string()
         }
         TimestampFormat::UTC => {
-            let datetime: DateTime<Utc> = task_internal.started_at.clone().into();
+            let datetime: DateTime<Utc> = task_internal.started_at.into();
             let rounded = datetime.round_subsecs(0);
             format!("[{:?}] ", rounded).dimmed().to_string()
         }
@@ -142,9 +141,9 @@ pub fn make_string(
         task_internal.status,
         TaskStatus::Finished(TaskResult::Failure(_), _)
     ) {
-        format!("[ERR] {}", task_internal.name).red()
+        format!("[ERR] {}", task_internal.full_name()).red()
     } else {
-        task_internal.name.yellow()
+        task_internal.full_name().yellow()
     };
 
     let duration = if let TaskStatus::Finished(_, finished_at) = task_internal.status {

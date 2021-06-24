@@ -1,6 +1,5 @@
 use super::DONTPRINT_TAG;
-use crate::task_internal::{TaskInternal, TaskResult, TaskStatus};
-use crate::task_tree::{TaskTree, TASK_TREE};
+use crate::task_tree::{TaskInternal, TaskResult, TaskStatus, TaskTree, TASK_TREE};
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
 use colored::Colorize;

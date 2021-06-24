@@ -1,7 +1,6 @@
-use crate::data::DataValue;
+use crate::data::{Data, DataValue};
 use crate::reporters::Reporter;
 use crate::task::Task;
-use crate::task_internal::{TaskInternal, TaskStatus};
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -32,6 +31,29 @@ pub(crate) struct TaskTreeInternal {
     root_tasks: BTreeSet<UniqID>,
     reporters: Vec<Arc<dyn Reporter>>,
     tasks_marked_for_deletion: HashMap<UniqID, SystemTime>,
+}
+
+#[derive(Clone)]
+pub struct TaskInternal {
+    pub id: UniqID,
+    pub name: String,
+    pub parent_names: Vec<String>,
+    pub started_at: SystemTime,
+    pub status: TaskStatus,
+    pub data: Data,
+    pub tags: BTreeSet<String>,
+}
+
+#[derive(Clone)]
+pub enum TaskStatus {
+    Running,
+    Finished(TaskResult, SystemTime),
+}
+
+#[derive(Clone)]
+pub enum TaskResult {
+    Success,
+    Failure(String),
 }
 
 impl TaskTree {
@@ -74,9 +96,28 @@ impl TaskTree {
     }
 
     pub fn create_task_internal<S: Into<String>>(&self, name: S, parent: Option<UniqID>) -> UniqID {
-        let task_internal = TaskInternal::new(name);
-        let t_arc = Arc::new(task_internal.clone());
         let mut tree = self.0.write().unwrap();
+
+        let mut parent_names = vec![];
+        let (name, tags) = crate::utils::extract_tags(name.into());
+        if let Some(parent) = parent {
+            if let Ok(parent_task) = tree.get_task(parent) {
+                parent_names = parent_task.parent_names.clone();
+                parent_names.push(parent_task.name.clone());
+            }
+        }
+
+        let task_internal = TaskInternal {
+            status: TaskStatus::Running,
+            name,
+            parent_names,
+            id: UniqID::new(),
+            started_at: SystemTime::now(),
+            data: Data::empty(),
+            tags,
+        };
+
+        let t_arc = Arc::new(task_internal.clone());
         let id = task_internal.id;
         tree.tasks_internal.insert(id, task_internal);
         if let Some(parent) = parent {
@@ -198,5 +239,25 @@ impl TaskTreeInternal {
             }
             self.tasks_marked_for_deletion.remove(&id);
         }
+    }
+}
+
+impl TaskInternal {
+    pub(crate) fn mark_done(&mut self, error_message: Option<String>) {
+        let tast_status = match error_message {
+            None => TaskResult::Success,
+            Some(msg) => TaskResult::Failure(msg),
+        };
+        self.status = TaskStatus::Finished(tast_status, SystemTime::now());
+    }
+
+    pub fn full_name(&self) -> String {
+        let mut full_name = String::new();
+        for parent_name in &self.parent_names {
+            full_name.push_str(parent_name);
+            full_name.push(':');
+        }
+        full_name.push_str(&self.name);
+        full_name
     }
 }

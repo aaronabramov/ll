@@ -1,7 +1,7 @@
 pub mod term_status;
 mod text;
 
-use crate::task_internal::TaskInternal;
+use crate::task_tree::TaskInternal;
 use std::sync::Arc;
 pub use term_status::TermStatus;
 

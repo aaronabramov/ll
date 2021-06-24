@@ -163,7 +163,12 @@ pub fn make_string(
     };
 
     let mut data = vec![];
-    for (k, entry) in &task_internal.data.map {
+    for (k, entry) in task_internal
+        .data
+        .map
+        .iter()
+        .chain(task_internal.data_transitive.map.iter())
+    {
         if entry.1.contains(DONTPRINT_TAG) {
             continue;
         }

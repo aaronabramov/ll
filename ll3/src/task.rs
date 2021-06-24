@@ -55,6 +55,10 @@ impl Task {
     pub fn data<D: Into<DataValue>>(&self, name: &str, data: D) {
         self.task_tree.add_data(self.id, name, data);
     }
+
+    pub fn data_transitive<D: Into<DataValue>>(&self, name: &str, data: D) {
+        self.task_tree.add_data_transitive(self.id, name, data);
+    }
 }
 
 impl Drop for Task {

@@ -40,7 +40,7 @@ impl Task {
         FT: Future<Output = Result<T>> + Send + 'static,
         T: Send + 'static,
     {
-        TASK_TREE.spawn_internal(name, f, None).await
+        TASK_TREE.spawn(name, f, None).await
     }
 
     pub async fn spawn<F, FT, T>(&self, name: &str, f: F) -> Result<T>
@@ -49,7 +49,15 @@ impl Task {
         FT: Future<Output = Result<T>> + Send + 'static,
         T: Send + 'static,
     {
-        self.task_tree.spawn_internal(name, f, Some(self.id)).await
+        self.task_tree.spawn(name, f, Some(self.id)).await
+    }
+
+    pub fn spawn_sync<F, T>(&self, name: &str, f: F) -> Result<T>
+    where
+        F: FnOnce(Task) -> Result<T>,
+        T: Send + 'static,
+    {
+        self.task_tree.spawn_sync(name, f, Some(self.id))
     }
 
     pub fn data<D: Into<DataValue>>(&self, name: &str, data: D) {

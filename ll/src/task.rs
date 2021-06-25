@@ -3,32 +3,36 @@ use crate::task_tree::{TaskTree, TASK_TREE};
 use crate::uniq_id::UniqID;
 use anyhow::Result;
 use std::future::Future;
+use std::sync::Arc;
 
 pub type MarkDoneOnDrop = bool;
 
-pub struct Task {
+#[derive(Clone)]
+pub struct Task(pub(crate) Arc<TaskData>);
+
+pub(crate) struct TaskData {
     pub(crate) id: UniqID,
     pub(crate) task_tree: TaskTree,
     pub(crate) mark_done_on_drop: MarkDoneOnDrop,
 }
 
 impl Task {
-    pub async fn create_new(name: &str) -> Self {
+    pub fn create_new(name: &str) -> Self {
         let id = TASK_TREE.create_task_internal(name, None);
-        Self {
+        Self(Arc::new(TaskData {
             id,
             task_tree: TASK_TREE.clone(),
             mark_done_on_drop: true,
-        }
+        }))
     }
 
     pub fn create(&self, name: &str) -> Self {
-        let id = self.task_tree.create_task_internal(name, Some(self.id));
-        Self {
+        let id = self.0.task_tree.create_task_internal(name, Some(self.0.id));
+        Self(Arc::new(TaskData {
             id,
-            task_tree: self.task_tree.clone(),
+            task_tree: self.0.task_tree.clone(),
             mark_done_on_drop: true,
-        }
+        }))
     }
 
     /// Spawn a new top level task, with no parent.
@@ -46,10 +50,10 @@ impl Task {
     pub async fn spawn<F, FT, T>(&self, name: &str, f: F) -> Result<T>
     where
         F: FnOnce(Task) -> FT,
-        FT: Future<Output = Result<T>> + Send + 'static,
-        T: Send + 'static,
+        FT: Future<Output = Result<T>> + Send,
+        T: Send,
     {
-        self.task_tree.spawn(name, f, Some(self.id)).await
+        self.0.task_tree.spawn(name, f, Some(self.0.id)).await
     }
 
     pub fn spawn_sync<F, T>(&self, name: &str, f: F) -> Result<T>
@@ -57,22 +61,22 @@ impl Task {
         F: FnOnce(Task) -> Result<T>,
         T: Send + 'static,
     {
-        self.task_tree.spawn_sync(name, f, Some(self.id))
+        self.0.task_tree.spawn_sync(name, f, Some(self.0.id))
     }
 
     pub fn data<D: Into<DataValue>>(&self, name: &str, data: D) {
-        self.task_tree.add_data(self.id, name, data);
+        self.0.task_tree.add_data(self.0.id, name, data);
     }
 
     pub fn data_transitive<D: Into<DataValue>>(&self, name: &str, data: D) {
-        self.task_tree.add_data_transitive(self.id, name, data);
+        self.0.task_tree.add_data_transitive(self.0.id, name, data);
     }
 }
 
 impl Drop for Task {
     fn drop(&mut self) {
-        if self.mark_done_on_drop {
-            self.task_tree.mark_done(self.id, None);
+        if self.0.mark_done_on_drop {
+            self.0.task_tree.mark_done(self.0.id, None);
         }
     }
 }

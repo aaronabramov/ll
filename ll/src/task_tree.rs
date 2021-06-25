@@ -1,6 +1,6 @@
 use crate::data::{Data, DataEntry, DataValue};
 use crate::reporters::Reporter;
-use crate::task::Task;
+use crate::task::{Task, TaskData};
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -73,11 +73,11 @@ impl TaskTree {
 
     pub fn create_task(&self, name: &str) -> Task {
         let id = self.create_task_internal(name, None);
-        Task {
+        Task(Arc::new(TaskData {
             id,
             task_tree: self.clone(),
             mark_done_on_drop: true,
-        }
+        }))
     }
 
     pub fn add_reporter(&self, reporter: Arc<dyn Reporter>) {
@@ -85,11 +85,11 @@ impl TaskTree {
     }
 
     fn pre_spawn(&self, name: String, parent: Option<UniqID>) -> Task {
-        Task {
+        Task(Arc::new(TaskData {
             id: self.create_task_internal(&name, parent),
             task_tree: self.clone(),
             mark_done_on_drop: false,
-        }
+        }))
     }
 
     fn post_spawn<T>(&self, id: UniqID, result: Result<T>) -> Result<T> {
@@ -113,10 +113,10 @@ impl TaskTree {
     pub fn spawn_sync<F, T>(&self, name: &str, f: F, parent: Option<UniqID>) -> Result<T>
     where
         F: FnOnce(Task) -> Result<T>,
-        T: Send + 'static,
+        T: Send,
     {
         let task = self.pre_spawn(name.into(), parent);
-        let id = task.id;
+        let id = task.0.id;
         let result = f(task);
         self.post_spawn(id, result)
     }
@@ -129,12 +129,12 @@ impl TaskTree {
     ) -> Result<T>
     where
         F: FnOnce(Task) -> FT,
-        FT: Future<Output = Result<T>> + Send + 'static,
-        T: Send + 'static,
+        FT: Future<Output = Result<T>> + Send,
+        T: Send,
     {
         let task = self.pre_spawn(name.into(), parent);
-        let id = task.id;
-        let result = tokio::spawn(f(task)).await?;
+        let id = task.0.id;
+        let result = f(task).await;
         self.post_spawn(id, result)
     }
 

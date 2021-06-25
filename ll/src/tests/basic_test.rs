@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 
 async fn sleep() {
     // just enough to drain the reporter tokio tasks
-    tokio::time::sleep(Duration::from_millis(5)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
 }
 
 fn setup() -> (TaskTree, StringReporter) {

@@ -31,6 +31,8 @@ pub(crate) struct TaskTreeInternal {
     root_tasks: BTreeSet<UniqID>,
     reporters: Vec<Arc<dyn Reporter>>,
     tasks_marked_for_deletion: HashMap<UniqID, SystemTime>,
+    report_start: Vec<UniqID>,
+    report_end: Vec<UniqID>,
 }
 
 #[derive(Clone)]
@@ -66,6 +68,15 @@ impl TaskTree {
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                 let mut tree = clone.0.write().unwrap();
                 tree.garbage_collect();
+            }
+        });
+        let clone = s.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                let mut tree = clone.0.write().unwrap();
+                tree.report_all_start();
+                tree.report_all_end();
             }
         });
         s
@@ -163,9 +174,9 @@ impl TaskTree {
             tags,
         };
 
-        let t_arc = Arc::new(task_internal.clone());
         let id = task_internal.id;
         tree.tasks_internal.insert(id, task_internal);
+        tree.report_start.push(id);
         if let Some(parent) = parent {
             tree.parent_to_children
                 .entry(parent)
@@ -178,13 +189,6 @@ impl TaskTree {
         } else {
             tree.root_tasks.insert(id);
         }
-        for reporter in &tree.reporters {
-            let r = reporter.clone();
-            let t = t_arc.clone();
-            tokio::spawn(async move {
-                r.task_start(t).await;
-            });
-        }
         id
     }
 
@@ -192,17 +196,8 @@ impl TaskTree {
         let mut tree = self.0.write().unwrap();
         if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
             task_internal.mark_done(error_message);
-            let t_arc = Arc::new(task_internal.clone());
-
-            for reporter in &tree.reporters {
-                let r = reporter.clone();
-                let t = t_arc.clone();
-                tokio::spawn(async move {
-                    r.task_end(t).await;
-                });
-            }
-
             tree.mark_for_gc(id);
+            tree.report_end.push(id);
         }
     }
 
@@ -306,6 +301,52 @@ impl TaskTreeInternal {
             }
             self.tasks_marked_for_deletion.remove(&id);
         }
+    }
+
+    fn report_all_start(&mut self) {
+        let mut task_ids = vec![];
+        std::mem::swap(&mut task_ids, &mut self.report_start);
+
+        let mut task_clones = vec![];
+
+        for id in task_ids {
+            if let Ok(task_internal) = self.get_task(id) {
+                task_clones.push(Arc::new(task_internal.clone()));
+            }
+        }
+
+        let reporters = self.reporters.clone();
+
+        tokio::spawn(async move {
+            for t in task_clones {
+                for reporter in &reporters {
+                    reporter.task_start(t.clone()).await;
+                }
+            }
+        });
+    }
+
+    fn report_all_end(&mut self) {
+        let mut task_ids = vec![];
+        std::mem::swap(&mut task_ids, &mut self.report_end);
+
+        let mut task_clones = vec![];
+
+        for id in task_ids {
+            if let Ok(task_internal) = self.get_task(id) {
+                task_clones.push(Arc::new(task_internal.clone()));
+            }
+        }
+
+        let reporters = self.reporters.clone();
+
+        tokio::spawn(async move {
+            for t in task_clones {
+                for reporter in &reporters {
+                    reporter.task_end(t.clone()).await;
+                }
+            }
+        });
     }
 }
 

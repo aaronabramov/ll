@@ -193,7 +193,7 @@ impl TermStatusInternal {
         let status = match task_internal.status {
             TaskStatus::Running => " ▶ ".black().on_yellow(),
             TaskStatus::Finished(TaskResult::Success, _) => " ✓ ".black().on_green(),
-            TaskStatus::Finished(TaskResult::Failure(_), _) => " x ".on_red(),
+            TaskStatus::Finished(TaskResult::Failure(_), _) => " x ".white().on_red(),
         };
 
         let duration = match task_internal.status {
@@ -203,15 +203,9 @@ impl TermStatusInternal {
             _ => task_internal.started_at.elapsed(),
         }?;
 
-        let indent_len = indent.len();
-        Ok(format!(
-            "{}{} {}{}{:?}",
-            indent,
-            status,
-            task_internal.name,
-            " ".repeat(50 - indent_len), // spacer
-            duration,
-        ))
+        let row_desc = format!("{}{} {}", indent, status, task_internal.name);
+
+        Ok(format!("{:<140}{:#?}", row_desc, duration))
         //
     }
 

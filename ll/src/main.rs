@@ -4,7 +4,7 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() {
     ll::add_reporter(Arc::new(ll::reporters::StdoutReporter::new()));
-    let root_task = Task::create_new("root").await;
+    let root_task = Task::create_new("root");
     ll::reporters::term_status::show().await;
 
     root_task

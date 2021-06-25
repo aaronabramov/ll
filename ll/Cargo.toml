@@ -1,7 +1,11 @@
 [package]
 name = "ll"
-version = "1.0.0"
+version = "3.0.0"
 edition = "2018"
+authors = ["Aaron Abramov <aaron@abramov.io>"]
+description = "rust logging library"
+license = "MIT"
+repository = "https://github.com/aaronabramov/ll"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

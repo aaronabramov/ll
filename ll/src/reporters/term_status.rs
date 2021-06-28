@@ -1,4 +1,3 @@
-use super::DONTPRINT_TAG;
 use crate::task_tree::{TaskInternal, TaskResult, TaskStatus, TaskTree, TASK_TREE};
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
@@ -7,6 +6,8 @@ use crossterm::{cursor, style, terminal, ExecutableCommand};
 use std::io::stdout;
 use std::sync::Arc;
 use std::sync::RwLock;
+
+const NOSTATUS_TAG: &str = "nostatus";
 
 lazy_static::lazy_static! {
     pub static ref TERM_STATUS: TermStatus = TermStatus::new(TASK_TREE.clone());
@@ -122,7 +123,7 @@ impl TermStatusInternal {
         while let Some((id, depth)) = stack.pop() {
             let task = tree.get_task(id).context("must be present")?;
 
-            let dontprint = task.tags.contains(DONTPRINT_TAG);
+            let dontprint = task.tags.contains(NOSTATUS_TAG);
 
             let children_iter = parent_to_children.get(&id).into_iter().flatten().peekable();
             let mut append_to_stack = vec![];
@@ -131,7 +132,7 @@ impl TermStatusInternal {
                 .clone()
                 .filter(|id| {
                     tree.get_task(**id)
-                        .map_or(false, |t| !t.tags.contains(DONTPRINT_TAG))
+                        .map_or(false, |t| !t.tags.contains(NOSTATUS_TAG))
                 })
                 .last();
 

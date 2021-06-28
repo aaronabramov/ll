@@ -73,10 +73,10 @@ impl Task {
     }
 }
 
-impl Drop for Task {
+impl Drop for TaskData {
     fn drop(&mut self) {
-        if self.0.mark_done_on_drop {
-            self.0.task_tree.mark_done(self.0.id, None);
+        if self.mark_done_on_drop {
+            self.task_tree.mark_done(self.id, None);
         }
     }
 }

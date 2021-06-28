@@ -13,11 +13,11 @@ lazy_static::lazy_static! {
 }
 
 pub async fn show() {
-    TERM_STATUS.show().await;
+    TERM_STATUS.show();
 }
 
 pub async fn hide() {
-    TERM_STATUS.hide().await;
+    TERM_STATUS.hide();
 }
 
 #[derive(Clone)]
@@ -28,13 +28,13 @@ impl TermStatus {
         Self(Arc::new(RwLock::new(TermStatusInternal::new(task_tree))))
     }
 
-    pub async fn show(&self) {
+    pub fn show(&self) {
         self.0.write().unwrap().enabled = true;
 
         let t = self.clone();
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(90)).await;
                 let _lock = stdio::LOCK.lock().expect("poisoned lock");
                 let mut internal = t.0.write().unwrap();
                 if internal.enabled {
@@ -47,7 +47,7 @@ impl TermStatus {
         });
     }
 
-    pub async fn hide(&self) {
+    pub fn hide(&self) {
         self.0.write().unwrap().enabled = false;
     }
 
@@ -88,8 +88,11 @@ impl TermStatusInternal {
 
     fn print(&mut self) -> Result<()> {
         let rows = self.make_status_rows()?;
-
         let height = rows.len();
+
+        if let (0, 0) = (height, self.current_height) {
+            return Ok(());
+        }
 
         let stdout = stdout();
         let mut lock = stdout.lock();
@@ -204,16 +207,20 @@ impl TermStatusInternal {
         }?;
 
         let row_desc = format!("{}{} {}", indent, status, task_internal.name);
+        let secs = duration.as_secs();
+        let millis = (duration.as_millis() % 1000) / 100;
+        let ts = format!("{}.{}s", secs, millis);
 
-        Ok(format!("{:<140}{:#?}", row_desc, duration))
-        //
+        Ok(format!("{:<140}{:>8}", row_desc, ts))
     }
 
     fn clear(&self) -> Result<()> {
-        let mut stdout = stdout();
-        for _ in 0..=self.current_height {
-            stdout.execute(terminal::Clear(terminal::ClearType::CurrentLine))?;
-            stdout.execute(cursor::MoveUp(1))?;
+        if self.current_height != 0 {
+            let mut stdout = stdout();
+            for _ in 0..(self.current_height + 1) {
+                stdout.execute(terminal::Clear(terminal::ClearType::CurrentLine))?;
+                stdout.execute(cursor::MoveUp(1))?;
+            }
         }
 
         Ok(())

@@ -155,40 +155,39 @@ impl TaskTree {
         let mut parent_names = vec![];
         let mut data_transitive = Data::empty();
         let (name, tags) = crate::utils::extract_tags(name.into());
-        if let Some(parent) = parent {
-            if let Ok(parent_task) = tree.get_task(parent) {
-                parent_names = parent_task.parent_names.clone();
-                parent_names.push(parent_task.name.clone());
-                data_transitive = parent_task.data_transitive.clone();
-            }
+        let id = UniqID::new();
+        if let Some(parent_task) = parent.and_then(|pid| tree.tasks_internal.get(&pid)) {
+            parent_names = parent_task.parent_names.clone();
+            parent_names.push(parent_task.name.clone());
+            data_transitive = parent_task.data_transitive.clone();
+            let parent_id = parent_task.id;
+
+            tree.parent_to_children
+                .entry(parent_id)
+                .or_insert_with(BTreeSet::new)
+                .insert(id);
+            tree.child_to_parents
+                .entry(id)
+                .or_insert_with(BTreeSet::new)
+                .insert(parent_id);
+        } else {
+            tree.root_tasks.insert(id);
         }
 
         let task_internal = TaskInternal {
             status: TaskStatus::Running,
             name,
             parent_names,
-            id: UniqID::new(),
+            id,
             started_at: SystemTime::now(),
             data: Data::empty(),
             data_transitive,
             tags,
         };
 
-        let id = task_internal.id;
         tree.tasks_internal.insert(id, task_internal);
         tree.report_start.push(id);
-        if let Some(parent) = parent {
-            tree.parent_to_children
-                .entry(parent)
-                .or_insert_with(BTreeSet::new)
-                .insert(id);
-            tree.child_to_parents
-                .entry(id)
-                .or_insert_with(BTreeSet::new)
-                .insert(parent);
-        } else {
-            tree.root_tasks.insert(id);
-        }
+
         id
     }
 

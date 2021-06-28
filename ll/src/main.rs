@@ -7,11 +7,27 @@ async fn main() {
     let root_task = Task::create_new("root");
     ll::reporters::term_status::show().await;
 
+    root_task
+        .spawn("will_finish_fast", |task| async move {
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(6000)).await;
+                task.spawn("will_spawn_after_parent_is_done", |_| async move {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(10000)).await;
+
+                    Ok(())
+                })
+                .await
+                .ok();
+            });
+            Ok(())
+        })
+        .await
+        .ok();
+
     Task::create_new("root2");
     root_task
         .spawn("task_1 #randomtag", |task| async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-            let task = Arc::new(task);
             let t_clone = task.clone();
 
             tokio::spawn(async move {
@@ -77,5 +93,5 @@ async fn main() {
         .ok();
 
     drop(root_task);
-    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    tokio::time::sleep(tokio::time::Duration::from_millis(10000)).await;
 }

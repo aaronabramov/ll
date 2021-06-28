@@ -292,6 +292,7 @@ impl TaskTreeInternal {
         for id in will_delete {
             self.tasks_internal.remove(&id);
             self.parent_to_children.remove(&id);
+            self.root_tasks.remove(&id);
             if let Some(parents) = self.child_to_parents.remove(&id) {
                 for parent in parents {
                     if let Some(children) = self.parent_to_children.get_mut(&parent) {

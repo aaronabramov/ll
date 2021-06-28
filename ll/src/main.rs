@@ -7,6 +7,7 @@ async fn main() {
     let root_task = Task::create_new("root");
     ll::reporters::term_status::show().await;
 
+    Task::create_new("root2");
     root_task
         .spawn("task_1 #randomtag", |task| async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;

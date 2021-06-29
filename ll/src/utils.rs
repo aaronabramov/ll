@@ -1,12 +1,11 @@
 use crate::level::Level;
-use crate::types;
 use std::collections::{BTreeSet, LinkedList};
 
 // Extract tags encoded in the key. we do it by using hashtags.
 // e.g. we can add them to the event like this:
 // `some.event#dont_print#trace` => wil result in the event called
 //  `some.event` and a set of tags ['dont_print', 'trace']
-pub(crate) fn extract_tags(string_with_tags: String) -> (String, types::Tags) {
+pub(crate) fn extract_tags(string_with_tags: String) -> (String, BTreeSet<String>) {
     let key_and_tags = string_with_tags
         .split('#')
         .map(|s| s.trim())
@@ -36,7 +35,7 @@ pub(crate) fn extract_tags(string_with_tags: String) -> (String, types::Tags) {
     (string_with_tags, BTreeSet::new())
 }
 
-pub(crate) fn extract_log_level_from_tags(tags: &types::Tags) -> Option<Level> {
+pub(crate) fn extract_log_level_from_tags(tags: &BTreeSet<String>) -> Option<Level> {
     let mut result_level = None;
 
     for tag in tags {

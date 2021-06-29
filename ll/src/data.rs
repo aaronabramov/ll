@@ -2,11 +2,11 @@ use crate::level::Level;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone)]
-pub struct EventData {
+pub struct Data {
     pub map: BTreeMap<String, DataEntry>,
 }
 
-impl EventData {
+impl Data {
     pub fn empty() -> Self {
         Self {
             map: BTreeMap::new(),
@@ -14,17 +14,14 @@ impl EventData {
     }
 }
 
-impl EventData {
-    pub fn add<V>(&mut self, key: String, value: V)
-    where
-        V: Into<DataValue>,
-    {
-        let (key, tags) = crate::utils::extract_tags(key);
+impl Data {
+    pub fn add<S: Into<String>, V: Into<DataValue>>(&mut self, key: S, value: V) {
+        let (key, tags) = crate::utils::extract_tags(key.into());
         let data_entry = DataEntry(value.into(), tags);
         self.map.insert(key, data_entry);
     }
 
-    pub fn merge(&mut self, other: &EventData) {
+    pub fn merge(&mut self, other: &Data) {
         for (k, v) in &other.map {
             self.map.insert(k.clone(), v.clone());
         }
@@ -66,7 +63,7 @@ pub enum DataValue {
     None,
 }
 
-impl std::fmt::Display for EventData {
+impl std::fmt::Display for Data {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut result = String::new();
         for (k, v) in &self.map {

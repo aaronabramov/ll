@@ -1,28 +1,28 @@
-use super::Drain;
-use crate::events::Event;
+use super::DONTPRINT_TAG;
+use crate::task_tree::{TaskInternal, TaskResult, TaskStatus};
 use chrono::prelude::*;
 use chrono::{DateTime, Local, Utc};
 use colored::*;
 use std::sync::{Arc, Mutex, RwLock};
 
-pub const DONTPRINT_TAG: &str = "dontprint";
+use super::Reporter;
 
 /// Simple drain that logs everything into STDOUT
-pub struct StdoutDrain {
+pub struct StdoutReporter {
     pub timestamp_format: Option<TimestampFormat>,
 }
 
 // Similar to STDOUT drain, but instead logs everything into a string
 // that it owns that can later be inspecetd/dumped.
 #[derive(Clone)]
-pub struct StringDrain {
+pub struct StringReporter {
     pub output: Arc<Mutex<String>>,
     timestamp_format: Arc<RwLock<TimestampFormat>>,
     duration_format: Arc<RwLock<DurationFormat>>,
     strip_ansi: bool,
 }
 
-impl StdoutDrain {
+impl StdoutReporter {
     pub fn new() -> Self {
         Self {
             timestamp_format: None,
@@ -31,6 +31,7 @@ impl StdoutDrain {
 }
 
 #[derive(Clone, Copy)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum TimestampFormat {
     UTC,
     Local,
@@ -44,16 +45,22 @@ pub enum DurationFormat {
     None,
 }
 
-impl Drain for StdoutDrain {
-    fn log_event(&self, event: &Event) {
-        if event.tags.contains(DONTPRINT_TAG) {
+#[async_trait::async_trait]
+impl Reporter for StdoutReporter {
+    async fn task_end(&self, task_internal: Arc<TaskInternal>) {
+        if task_internal.tags.contains(DONTPRINT_TAG) {
             return;
         }
 
         let timestamp_format = self.timestamp_format.unwrap_or(TimestampFormat::UTC);
-        let result = make_string(event, timestamp_format, DurationFormat::Milliseconds);
+        let result = make_string(
+            &task_internal,
+            timestamp_format,
+            DurationFormat::Milliseconds,
+        );
 
-        eprint!("{}", result);
+        crate::println!("{}", result);
+        // eprint!("{}", result);
     }
 }
 
@@ -64,7 +71,7 @@ pub fn strip_ansi(s: &str) -> String {
     .expect("not a utf8 string")
 }
 
-impl StringDrain {
+impl StringReporter {
     pub fn new() -> Self {
         Self {
             output: Arc::new(Mutex::new(String::new())),
@@ -87,30 +94,33 @@ impl StringDrain {
     }
 }
 
-impl Drain for StringDrain {
-    fn log_event(&self, event: &Event) {
-        if event.tags.contains(DONTPRINT_TAG) {
+#[async_trait::async_trait]
+impl Reporter for StringReporter {
+    async fn task_end(&self, task_internal: Arc<TaskInternal>) {
+        if task_internal.tags.contains(DONTPRINT_TAG) {
             return;
         }
         let timestamp_format = *self.timestamp_format.read().unwrap();
         let duration_format = *self.duration_format.read().unwrap();
-        let mut result = make_string(event, timestamp_format, duration_format);
+        let mut result = make_string(&task_internal, timestamp_format, duration_format);
         if self.strip_ansi {
             result = strip_ansi(&result);
         }
-        self.output.lock().expect("poisoned lock").push_str(&result);
+        let mut output = self.output.lock().expect("poisoned lock");
+        output.push_str(&result);
+        output.push('\n');
     }
 }
 
-impl std::fmt::Display for StringDrain {
+impl std::fmt::Display for StringReporter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = self.output.lock().expect("poisoned lock");
-        write!(f, "\n{}\n", &s)
+        write!(f, "{}", &s)
     }
 }
 
 pub fn make_string(
-    event: &Event,
+    task_internal: &TaskInternal,
     timestamp_format: TimestampFormat,
     duration_format: DurationFormat,
 ) -> String {
@@ -118,54 +128,65 @@ pub fn make_string(
         TimestampFormat::None => format!(""),
         TimestampFormat::Redacted => "[ ] ".to_string(), // for testing
         TimestampFormat::Local => {
-            let datetime: DateTime<Local> = event.started_at.clone().into();
+            let datetime: DateTime<Local> = task_internal.started_at.into();
             let rounded = datetime.round_subsecs(0);
             let formatted = rounded.format("%I:%M:%S%p");
             format!("[{}] ", formatted).dimmed().to_string()
         }
         TimestampFormat::UTC => {
-            let datetime: DateTime<Utc> = event.started_at.clone().into();
+            let datetime: DateTime<Utc> = task_internal.started_at.into();
             let rounded = datetime.round_subsecs(0);
             format!("[{:?}] ", rounded).dimmed().to_string()
         }
     };
 
-    let event_name = if event.is_error {
-        format!("[ERR] {}", event.name).red()
+    let name = if matches!(
+        task_internal.status,
+        TaskStatus::Finished(TaskResult::Failure(_), _)
+    ) {
+        format!("[ERR] {}", task_internal.full_name()).red()
     } else {
-        event.name.yellow()
+        task_internal.full_name().yellow()
     };
 
-    let mut result = match event.duration {
+    let duration = if let TaskStatus::Finished(_, finished_at) = task_internal.status {
+        finished_at.duration_since(task_internal.started_at).ok()
+    } else {
+        None
+    };
+
+    let mut result = match duration {
         Some(d) => format!(
             "{}{:<60}{}",
             timestamp,
-            event_name,
+            name,
             format_duration(d, duration_format)
         ),
-        None => format!("{}{}", timestamp, event_name),
+        None => format!("{}{}", timestamp, name),
     };
 
-    result.push('\n');
-
-    for (k, entry) in &event.data.map {
+    let mut data = vec![];
+    for (k, entry) in task_internal.all_data() {
         if entry.1.contains(DONTPRINT_TAG) {
             continue;
         }
 
-        result.push_str(&format!("  |      {}: {}\n", k, entry.0).dimmed());
+        data.push(format!("  |      {}: {}", k, entry.0).dimmed().to_string());
     }
 
-    if let Some(error) = &event.error_msg {
-        result.push_str("  |\n");
-        let error_log = error
+    if !data.is_empty() {
+        result.push('\n');
+        result.push_str(&data.join("\n"));
+    }
+
+    if let TaskStatus::Finished(TaskResult::Failure(error_msg), _) = &task_internal.status {
+        result.push_str("\n  |\n");
+        let error_log = error_msg
             .split('\n')
             .map(|line| format!("  |  {}", line))
             .collect::<Vec<String>>()
-            .join("\n")
-            .red();
+            .join("\n");
         result.push_str(&error_log);
-        result.push('\n');
     }
 
     result

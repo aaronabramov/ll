@@ -1,11 +1,11 @@
 #![allow(clippy::new_without_default)]
 
-mod data;
-mod level;
-mod task;
-mod task_tree;
-mod uniq_id;
-mod utils;
+pub mod data;
+pub mod level;
+pub mod task;
+pub mod task_tree;
+pub mod uniq_id;
+pub mod utils;
 
 pub use task::Task;
 

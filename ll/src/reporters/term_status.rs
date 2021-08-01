@@ -30,7 +30,13 @@ impl TermStatus {
     }
 
     pub fn show(&self) {
-        self.0.write().unwrap().enabled = true;
+        let mut lock = self.0.write().unwrap();
+        if lock.enabled {
+            return;
+        } else {
+            lock.enabled = true;
+        }
+        drop(lock);
 
         let t = self.clone();
         std::thread::spawn(move || {

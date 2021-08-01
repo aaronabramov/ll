@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    ll::add_reporter(Arc::new(ll::reporters::StdoutReporter::new()));
+    ll::add_reporter(Arc::new(ll::reporters::StdioReporter::new()));
     let root_task = Task::create_new("root #nostatus");
     ll::reporters::term_status::show().await;
 
@@ -53,6 +53,13 @@ async fn main() {
                     Ok(())
                 }),
                 task.spawn("task_3", |task| async move {
+                    for i in 10..=99 {
+                        let mut result = vec![];
+                        let s = format!("{} {} <<<>>>", i, "-".repeat(i % 10));
+                        result.push(s);
+                        println!("{}", result.join("\n"));
+                    }
+
                     tokio::time::sleep(tokio::time::Duration::from_millis(2750)).await;
                     task.data_transitive("transitive", 555);
 
@@ -89,7 +96,7 @@ async fn main() {
             Ok(())
         })
         .await
-        .map_err(|e| ll::println!("{:?}", e))
+        .map_err(|e| println!("{:?}", e))
         .ok();
 
     drop(root_task);

@@ -2,8 +2,8 @@ use crate::task_tree::{TaskInternal, TaskResult, TaskStatus, TaskTree, TASK_TREE
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
 use colored::Colorize;
-use crossterm::{cursor, style, terminal, ExecutableCommand};
-use std::io::stdout;
+use crossterm::{cursor, style, terminal};
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -33,28 +33,43 @@ impl TermStatus {
         self.0.write().unwrap().enabled = true;
 
         let t = self.clone();
-        tokio::spawn(async move {
+        std::thread::spawn(move || {
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(90)).await;
-                let _lock = stdio::LOCK.lock().expect("poisoned lock");
+                // This is dumb, but it lets regular `println!` macros and such
+                // time to acquire a global mutex to print whatever they want to
+                // print. Without it this fuction will release and acquire the
+                // lock right away without letting anything print at all.
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                let stdout = std::io::stdout();
+                let stderr = std::io::stderr();
+                let stdout_lock = stdout.lock();
+                let mut stderr_lock = stderr.lock();
+
                 let mut internal = t.0.write().unwrap();
                 if internal.enabled {
-                    internal.clear().ok();
-                    internal.print().ok();
+                    internal.print(&mut stderr_lock).ok();
                 } else {
                     break;
                 }
+                // STDIO is locked the whole time.
+                // WARN: If there a heavy IO
+                // happening this will obviously slow things down quite a bit.
+                std::thread::sleep(std::time::Duration::from_millis(90));
+
+                if internal.enabled {
+                    internal.clear(&mut stderr_lock).ok();
+                } else {
+                    break;
+                }
+
+                drop(stdout_lock);
+                drop(stderr_lock);
             }
         });
     }
 
     pub fn hide(&self) {
         self.0.write().unwrap().enabled = false;
-    }
-
-    pub async fn clean(&self) -> Result<()> {
-        self.0.read().unwrap().clear()?;
-        Ok(())
     }
 }
 
@@ -87,7 +102,7 @@ impl TermStatusInternal {
         }
     }
 
-    fn print(&mut self) -> Result<()> {
+    fn print(&mut self, stdio: &mut impl Write) -> Result<()> {
         let rows = self.make_status_rows()?;
         let height = rows.len();
 
@@ -95,14 +110,11 @@ impl TermStatusInternal {
             return Ok(());
         }
 
-        let stdout = stdout();
-        let mut lock = stdout.lock();
-
         self.current_height = height;
 
-        lock.execute(style::Print("\n"))?;
-        lock.execute(style::Print(rows.join("\n")))?;
-        lock.execute(style::Print("\n"))?;
+        crossterm::execute!(stdio, style::Print("\n")).ok();
+        crossterm::execute!(stdio, style::Print(rows.join("\n"))).ok();
+        crossterm::execute!(stdio, style::Print("\n")).ok();
 
         Ok(())
     }
@@ -215,64 +227,14 @@ impl TermStatusInternal {
         Ok(format!("{:<140}{:>8}", row_desc, ts))
     }
 
-    fn clear(&self) -> Result<()> {
+    fn clear(&self, stdio: &mut impl Write) -> Result<()> {
         if self.current_height != 0 {
-            let mut stdout = stdout();
             for _ in 0..(self.current_height + 1) {
-                stdout.execute(terminal::Clear(terminal::ClearType::CurrentLine))?;
-                stdout.execute(cursor::MoveUp(1))?;
+                crossterm::execute!(stdio, terminal::Clear(terminal::ClearType::CurrentLine)).ok();
+                crossterm::execute!(stdio, cursor::MoveUp(1)).ok();
             }
         }
 
         Ok(())
-    }
-}
-
-pub mod stdio {
-    use super::TERM_STATUS;
-    use std::io::Write;
-    use std::sync::Mutex;
-
-    lazy_static::lazy_static! {
-        pub(crate) static ref LOCK: Mutex<()> = Mutex::new(());
-        pub static ref STDOUT: BufferedStdout = BufferedStdout {};
-    }
-
-    pub fn stdout() -> BufferedStdout {
-        STDOUT.clone()
-    }
-
-    #[macro_export]
-    macro_rules! println {
-        ($($t:expr),+) => {{
-            use std::io::Write;
-            let mut stdout = $crate::reporters::term_status::stdio::stdout();
-            write!(stdout, $($t),+).unwrap();
-            write!(stdout, "\n").unwrap();
-        }};
-    }
-
-    #[derive(Clone)]
-    pub struct BufferedStdout {}
-
-    impl Write for BufferedStdout {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            let _lock = LOCK.lock().expect("poisoned lock");
-            let mut term_status = TERM_STATUS.0.write().unwrap();
-            if term_status.enabled {
-                term_status.clear().unwrap();
-            }
-            let mut stdout = std::io::stdout();
-            let result = stdout.write(buf);
-            if term_status.enabled {
-                term_status.print().unwrap();
-            }
-            result
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            let mut stdout = std::io::stdout();
-            stdout.flush()
-        }
     }
 }

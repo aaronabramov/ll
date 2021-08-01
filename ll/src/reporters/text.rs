@@ -8,8 +8,11 @@ use std::sync::{Arc, Mutex, RwLock};
 use super::Reporter;
 
 /// Simple drain that logs everything into STDOUT
-pub struct StdoutReporter {
+pub struct StdioReporter {
     pub timestamp_format: Option<TimestampFormat>,
+    /// By default this reporter writes to STDERR,
+    /// this flag will make it write to STDOUT instead
+    pub use_stdout: bool,
 }
 
 // Similar to STDOUT drain, but instead logs everything into a string
@@ -22,10 +25,11 @@ pub struct StringReporter {
     strip_ansi: bool,
 }
 
-impl StdoutReporter {
+impl StdioReporter {
     pub fn new() -> Self {
         Self {
             timestamp_format: None,
+            use_stdout: false,
         }
     }
 }
@@ -46,7 +50,7 @@ pub enum DurationFormat {
 }
 
 #[async_trait::async_trait]
-impl Reporter for StdoutReporter {
+impl Reporter for StdioReporter {
     async fn task_end(&self, task_internal: Arc<TaskInternal>) {
         if task_internal.tags.contains(DONTPRINT_TAG) {
             return;
@@ -59,8 +63,11 @@ impl Reporter for StdoutReporter {
             DurationFormat::Milliseconds,
         );
 
-        crate::println!("{}", result);
-        // eprint!("{}", result);
+        if self.use_stdout {
+            println!("{}", result);
+        } else {
+            eprintln!("{}", result);
+        }
     }
 }
 

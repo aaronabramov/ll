@@ -5,7 +5,7 @@ use crate::task_tree::TaskInternal;
 use std::sync::Arc;
 pub use term_status::TermStatus;
 
-pub use text::StdoutReporter;
+pub use text::StdioReporter;
 pub use text::StringReporter;
 
 pub const DONTPRINT_TAG: &str = "dontprint";

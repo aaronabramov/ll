@@ -131,7 +131,19 @@ pub fn make_string(
     timestamp_format: TimestampFormat,
     duration_format: DurationFormat,
 ) -> String {
-    let timestamp = match timestamp_format {
+    let timestamp = format_timestamp(timestamp_format, task_internal);
+    let name = format_name(task_internal);
+    let duration = format_duration(task_internal, duration_format);
+    let data = format_data(task_internal);
+    let error = format_error(task_internal);
+
+    let result = format!("{}{}{}{}{}", timestamp, duration, name, data, error);
+
+    result
+}
+
+fn format_timestamp(timestamp_format: TimestampFormat, task_internal: &TaskInternal) -> String {
+    match timestamp_format {
         TimestampFormat::None => format!(""),
         TimestampFormat::Redacted => "[ ] ".to_string(), // for testing
         TimestampFormat::Local => {
@@ -145,33 +157,38 @@ pub fn make_string(
             let rounded = datetime.round_subsecs(0);
             format!("[{:?}] ", rounded).dimmed().to_string()
         }
-    };
+    }
+}
 
-    let name = if matches!(
+fn format_name(task_internal: &TaskInternal) -> ColoredString {
+    if matches!(
         task_internal.status,
         TaskStatus::Finished(TaskResult::Failure(_), _)
     ) {
         format!("[ERR] {}", task_internal.full_name()).red()
     } else {
-        task_internal.full_name().yellow()
-    };
+        task_internal.full_name().green()
+    }
+}
 
-    let duration = if let TaskStatus::Finished(_, finished_at) = task_internal.status {
-        finished_at.duration_since(task_internal.started_at).ok()
+fn format_duration(task_internal: &TaskInternal, format: DurationFormat) -> String {
+    if let TaskStatus::Finished(_, finished_at) = task_internal.status {
+        let d = finished_at.duration_since(task_internal.started_at).ok();
+        match (d, format) {
+            (Some(d), DurationFormat::Milliseconds) => format!("| {:>6}ms | ", d.as_millis())
+                .bold()
+                .dimmed()
+                .to_string(),
+            (Some(_), DurationFormat::None) => String::new(),
+            (None, _) => String::new(),
+        }
     } else {
-        None
-    };
+        String::new()
+    }
+}
 
-    let mut result = match duration {
-        Some(d) => format!(
-            "{}{:<60}{}",
-            timestamp,
-            name,
-            format_duration(d, duration_format)
-        ),
-        None => format!("{}{}", timestamp, name),
-    };
-
+fn format_data(task_internal: &TaskInternal) -> String {
+    let mut result = String::new();
     let mut data = vec![];
     for (k, entry) in task_internal.all_data() {
         if entry.1.contains(DONTPRINT_TAG) {
@@ -185,7 +202,11 @@ pub fn make_string(
         result.push('\n');
         result.push_str(&data.join("\n"));
     }
+    result
+}
 
+fn format_error(task_internal: &TaskInternal) -> String {
+    let mut result = String::new();
     if let TaskStatus::Finished(TaskResult::Failure(error_msg), _) = &task_internal.status {
         result.push_str("\n  |\n");
         let error_log = error_msg
@@ -195,13 +216,5 @@ pub fn make_string(
             .join("\n");
         result.push_str(&error_log);
     }
-
     result
-}
-
-fn format_duration(d: std::time::Duration, format: DurationFormat) -> String {
-    match format {
-        DurationFormat::Milliseconds => format!("|{:>6}ms", d.as_millis()),
-        DurationFormat::None => String::new(),
-    }
 }

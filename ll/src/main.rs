@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    ll::add_reporter(Arc::new(ll::reporters::StdioReporter::new()));
+    let mut reporter = ll::reporters::StdioReporter::new();
+    reporter.timestamp_format = Some(ll::reporters::text::TimestampFormat::Local);
+    ll::add_reporter(Arc::new(reporter));
     let root_task = Task::create_new("root #nostatus");
     ll::reporters::term_status::show().await;
 
@@ -57,7 +59,7 @@ async fn main() {
                         let mut result = vec![];
                         let s = format!("{} {} <<<>>>", i, "-".repeat(i % 10));
                         result.push(s);
-                        println!("{}", result.join("\n"));
+                        // println!("{}", result.join("\n"));
                     }
 
                     tokio::time::sleep(tokio::time::Duration::from_millis(2750)).await;

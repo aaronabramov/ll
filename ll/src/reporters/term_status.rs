@@ -48,6 +48,11 @@ impl TermStatus {
                 std::thread::sleep(std::time::Duration::from_millis(1));
                 let stdout = std::io::stdout();
                 let stderr = std::io::stderr();
+
+                // Get both locks for stdout and stderr so nothing can print to
+                // it while the status tree is displayed. If something prints
+                // while the tree si there everything will get messed up, output
+                // will be lost and parts of tree will end up as random noise.
                 let stdout_lock = stdout.lock();
                 let mut stderr_lock = stderr.lock();
 
@@ -60,7 +65,7 @@ impl TermStatus {
                 // STDIO is locked the whole time.
                 // WARN: If there a heavy IO
                 // happening this will obviously slow things down quite a bit.
-                std::thread::sleep(std::time::Duration::from_millis(90));
+                std::thread::sleep(std::time::Duration::from_millis(50));
 
                 if internal.enabled {
                     internal.clear(&mut stderr_lock).ok();

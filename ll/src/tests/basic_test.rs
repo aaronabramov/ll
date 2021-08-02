@@ -40,8 +40,8 @@ async fn basic_events_test() -> Result<()> {
     snapshot!(
         s.to_string(),
         "
-[ ] root:test                                                   
-[ ] [ERR] root:test_with_data                                   
+[ ] root:test
+[ ] [ERR] root:test_with_data
   |      float: 5.98
   |      hello: hi
   |      int: 5
@@ -54,7 +54,7 @@ async fn basic_events_test() -> Result<()> {
   |  
   |  Caused by:
   |      here is error msg
-[ ] root:test_3                                                 
+[ ] root:test_3
 
 "
     );
@@ -101,14 +101,14 @@ Caused by:
     snapshot!(
         s.to_string(),
         "
-[ ] [ERR] root:top_level:1_level:2_level                        
+[ ] [ERR] root:top_level:1_level:2_level
   |
   |  [Task] 2_level
   |  
   |  
   |  Caused by:
   |      oh noes, this fails
-[ ] [ERR] root:top_level:1_level                                
+[ ] [ERR] root:top_level:1_level
   |      1_level_data: 9
   |
   |  [Task] 1_level
@@ -119,7 +119,7 @@ Caused by:
   |      0: [Task] 2_level
   |         
   |      1: oh noes, this fails
-[ ] [ERR] root:top_level                                        
+[ ] [ERR] root:top_level
   |      top_level_data: 5
   |
   |  [Task] top_level
@@ -165,14 +165,14 @@ async fn logger_data_test() -> Result<()> {
     snapshot!(
         s.to_string(),
         "
-[ ] root:t1:has_process_id                                      
+[ ] root:t1:has_process_id
   |      process_id: 123
-[ ] root:t1:t2:has_process_and_request_id                       
+[ ] root:t1:t2:has_process_and_request_id
   |      process_id: 123
   |      request_id: 234
-[ ] root:t1:t2:t3:wont_print_request_id                         
+[ ] root:t1:t2:t3:wont_print_request_id
   |      process_id: 123
-[ ] root:t1:t2:t3:t4:wont_print_request_id                      
+[ ] root:t1:t2:t3:t4:wont_print_request_id
   |      process_id: 123
 
 "
@@ -197,7 +197,7 @@ async fn async_test() -> Result<()> {
     snapshot!(
         s.to_string(),
         "
-[ ] root:async_event                                            
+[ ] root:async_event
   |      async_data: 5
 
 "

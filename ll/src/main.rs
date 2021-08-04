@@ -4,10 +4,12 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() {
     let mut reporter = ll::reporters::StdioReporter::new();
+    reporter.log_task_start = true;
     reporter.timestamp_format = Some(ll::reporters::text::TimestampFormat::Local);
     ll::add_reporter(Arc::new(reporter));
     let root_task = Task::create_new("root #nostatus");
     ll::reporters::term_status::show().await;
+    ll::task_tree::TASK_TREE.set_force_flush(true);
 
     root_task
         .spawn("will_finish_fast", |task| async move {

@@ -8,7 +8,7 @@ async fn sleep() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 }
 
-fn setup() -> (TaskTree, StringReporter) {
+fn setup() -> (Arc<TaskTree>, StringReporter) {
     let string_reporter = StringReporter::new();
     let tt = TaskTree::new();
     tt.add_reporter(Arc::new(string_reporter.clone()));

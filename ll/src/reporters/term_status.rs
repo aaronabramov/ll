@@ -25,7 +25,7 @@ pub async fn hide() {
 pub struct TermStatus(Arc<RwLock<TermStatusInternal>>);
 
 impl TermStatus {
-    fn new(task_tree: TaskTree) -> Self {
+    fn new(task_tree: Arc<TaskTree>) -> Self {
         Self(Arc::new(RwLock::new(TermStatusInternal::new(task_tree))))
     }
 
@@ -100,12 +100,12 @@ type Depth = Vec<bool>;
 #[derive(Clone)]
 pub struct TermStatusInternal {
     current_height: usize,
-    task_tree: TaskTree,
+    task_tree: Arc<TaskTree>,
     enabled: bool,
 }
 
 impl TermStatusInternal {
-    fn new(task_tree: TaskTree) -> Self {
+    fn new(task_tree: Arc<TaskTree>) -> Self {
         Self {
             current_height: 0,
             task_tree,
@@ -131,7 +131,7 @@ impl TermStatusInternal {
     }
 
     fn make_status_rows(&self) -> Result<Vec<String>> {
-        let tree = self.task_tree.0.read().unwrap();
+        let tree = self.task_tree.tree_internal.read().unwrap();
         let child_to_parents = tree.child_to_parents();
         let parent_to_children = tree.parent_to_children();
 

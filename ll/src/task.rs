@@ -12,7 +12,7 @@ pub struct Task(pub(crate) Arc<TaskData>);
 
 pub(crate) struct TaskData {
     pub(crate) id: UniqID,
-    pub(crate) task_tree: TaskTree,
+    pub(crate) task_tree: Arc<TaskTree>,
     pub(crate) mark_done_on_drop: MarkDoneOnDrop,
 }
 

@@ -43,7 +43,7 @@ impl StdioReporter {
         }
     }
 
-    async fn report(&self, task_internal: Arc<TaskInternal>, report_type: TaskReportType) {
+    fn report(&self, task_internal: Arc<TaskInternal>, report_type: TaskReportType) {
         if task_internal.tags.contains(DONTPRINT_TAG) {
             return;
         }
@@ -79,16 +79,15 @@ pub enum DurationFormat {
     None,
 }
 
-#[async_trait::async_trait]
 impl Reporter for StdioReporter {
-    async fn task_start(&self, task_internal: Arc<TaskInternal>) {
+    fn task_start(&self, task_internal: Arc<TaskInternal>) {
         if self.log_task_start {
-            self.report(task_internal, TaskReportType::Start).await
+            self.report(task_internal, TaskReportType::Start)
         }
     }
 
-    async fn task_end(&self, task_internal: Arc<TaskInternal>) {
-        self.report(task_internal, TaskReportType::End).await
+    fn task_end(&self, task_internal: Arc<TaskInternal>) {
+        self.report(task_internal, TaskReportType::End)
     }
 }
 
@@ -109,7 +108,7 @@ impl StringReporter {
         }
     }
 
-    async fn report(&self, task_internal: Arc<TaskInternal>, report_type: TaskReportType) {
+    fn report(&self, task_internal: Arc<TaskInternal>, report_type: TaskReportType) {
         if task_internal.tags.contains(DONTPRINT_TAG) {
             return;
         }
@@ -142,14 +141,13 @@ impl StringReporter {
     }
 }
 
-#[async_trait::async_trait]
 impl Reporter for StringReporter {
-    async fn task_start(&self, task_internal: Arc<TaskInternal>) {
-        self.report(task_internal, TaskReportType::Start).await;
+    fn task_start(&self, task_internal: Arc<TaskInternal>) {
+        self.report(task_internal, TaskReportType::Start);
     }
 
-    async fn task_end(&self, task_internal: Arc<TaskInternal>) {
-        self.report(task_internal, TaskReportType::End).await;
+    fn task_end(&self, task_internal: Arc<TaskInternal>) {
+        self.report(task_internal, TaskReportType::End);
     }
 }
 

@@ -5,23 +5,30 @@ use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::future::Future;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
 
 const REMOVE_TASK_AFTER_DONE_MS: u64 = 5000;
 
 lazy_static::lazy_static! {
-    pub(crate) static ref TASK_TREE: TaskTree  = TaskTree::new();
+    pub static ref TASK_TREE: Arc<TaskTree>  = TaskTree::new();
 }
 
 pub fn add_reporter(reporter: Arc<dyn Reporter>) {
     TASK_TREE.add_reporter(reporter);
 }
 
-#[derive(Clone, Default)]
-pub struct TaskTree(pub(crate) Arc<RwLock<TaskTreeInternal>>);
+#[derive(Default)]
+pub struct TaskTree {
+    pub(crate) tree_internal: RwLock<TaskTreeInternal>,
+    /// If true, it will block the current thread untill all task events are
+    /// reported (e.g. written to STDOUT)
+    force_flush: AtomicBool,
+}
 
 #[derive(Default)]
 pub(crate) struct TaskTreeInternal {
@@ -60,29 +67,34 @@ pub enum TaskResult {
 }
 
 impl TaskTree {
-    pub fn new() -> Self {
-        let s = Self::default();
+    pub fn new() -> Arc<Self> {
+        let s = Arc::new(Self::default());
         let clone = s.clone();
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                let mut tree = clone.0.write().unwrap();
+                let mut tree = clone.tree_internal.write().unwrap();
                 tree.garbage_collect();
             }
         });
         let clone = s.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                let mut tree = clone.0.write().unwrap();
-                tree.report_all_start();
-                tree.report_all_end();
-            }
+        thread::spawn(move || loop {
+            thread::sleep(std::time::Duration::from_millis(10));
+            clone.report_all();
         });
+
         s
     }
 
-    pub fn create_task(&self, name: &str) -> Task {
+    pub fn set_force_flush(&self, enabled: bool) {
+        self.force_flush.store(enabled, Ordering::SeqCst)
+    }
+
+    pub fn force_flush_enabled(&self) -> bool {
+        self.force_flush.load(Ordering::SeqCst)
+    }
+
+    pub fn create_task(self: &Arc<Self>, name: &str) -> Task {
         let id = self.create_task_internal(name, None);
         Task(Arc::new(TaskData {
             id,
@@ -92,18 +104,20 @@ impl TaskTree {
     }
 
     pub fn add_reporter(&self, reporter: Arc<dyn Reporter>) {
-        self.0.write().unwrap().reporters.push(reporter);
+        self.tree_internal.write().unwrap().reporters.push(reporter);
     }
 
-    fn pre_spawn(&self, name: String, parent: Option<UniqID>) -> Task {
-        Task(Arc::new(TaskData {
+    fn pre_spawn(self: &Arc<Self>, name: String, parent: Option<UniqID>) -> Task {
+        let task = Task(Arc::new(TaskData {
             id: self.create_task_internal(&name, parent),
             task_tree: self.clone(),
             mark_done_on_drop: false,
-        }))
+        }));
+        self.maybe_force_flush();
+        task
     }
 
-    fn post_spawn<T>(&self, id: UniqID, result: Result<T>) -> Result<T> {
+    fn post_spawn<T>(self: &Arc<Self>, id: UniqID, result: Result<T>) -> Result<T> {
         let result = result.with_context(|| {
             let mut desc = String::from("[Task]");
             if let Some(task_internal) = self.get_cloned_task(id) {
@@ -118,10 +132,11 @@ impl TaskTree {
             desc
         });
         self.mark_done(id, result.as_ref().err().map(|e| format!("{:?}", e)));
+        self.maybe_force_flush();
         result
     }
 
-    pub fn spawn_sync<F, T>(&self, name: &str, f: F, parent: Option<UniqID>) -> Result<T>
+    pub fn spawn_sync<F, T>(self: &Arc<Self>, name: &str, f: F, parent: Option<UniqID>) -> Result<T>
     where
         F: FnOnce(Task) -> Result<T>,
         T: Send,
@@ -133,7 +148,7 @@ impl TaskTree {
     }
 
     pub(crate) async fn spawn<F, FT, T, S: Into<String> + Clone>(
-        &self,
+        self: &Arc<Self>,
         name: S,
         f: F,
         parent: Option<UniqID>,
@@ -149,8 +164,12 @@ impl TaskTree {
         self.post_spawn(id, result)
     }
 
-    pub fn create_task_internal<S: Into<String>>(&self, name: S, parent: Option<UniqID>) -> UniqID {
-        let mut tree = self.0.write().unwrap();
+    pub fn create_task_internal<S: Into<String>>(
+        self: &Arc<Self>,
+        name: S,
+        parent: Option<UniqID>,
+    ) -> UniqID {
+        let mut tree = self.tree_internal.write().unwrap();
 
         let mut parent_names = vec![];
         let mut data_transitive = Data::empty();
@@ -192,7 +211,7 @@ impl TaskTree {
     }
 
     pub fn mark_done(&self, id: UniqID, error_message: Option<String>) {
-        let mut tree = self.0.write().unwrap();
+        let mut tree = self.tree_internal.write().unwrap();
         if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
             task_internal.mark_done(error_message);
             tree.mark_for_gc(id);
@@ -201,7 +220,7 @@ impl TaskTree {
     }
 
     pub fn add_data<S: Into<String>, D: Into<DataValue>>(&self, id: UniqID, key: S, value: D) {
-        let mut tree = self.0.write().unwrap();
+        let mut tree = self.tree_internal.write().unwrap();
         if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
             task_internal.data.add(key, value);
         }
@@ -213,15 +232,35 @@ impl TaskTree {
         key: S,
         value: D,
     ) {
-        let mut tree = self.0.write().unwrap();
+        let mut tree = self.tree_internal.write().unwrap();
         if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
             task_internal.data_transitive.add(key, value);
         }
     }
 
     fn get_cloned_task(&self, id: UniqID) -> Option<TaskInternal> {
-        let tree = self.0.read().unwrap();
+        let tree = self.tree_internal.read().unwrap();
         tree.get_task(id).ok().cloned()
+    }
+
+    fn maybe_force_flush(&self) {
+        if self.force_flush.load(Ordering::SeqCst) {
+            self.report_all();
+        }
+    }
+
+    fn report_all(&self) {
+        let mut tree = self.tree_internal.write().unwrap();
+        let (start_tasks, end_tasks, reporters) = tree.get_tasks_and_reporters();
+        drop(tree);
+        for reporter in reporters {
+            for task in &start_tasks {
+                reporter.task_start(task.clone());
+            }
+            for task in &end_tasks {
+                reporter.task_end(task.clone());
+            }
+        }
     }
 }
 
@@ -303,50 +342,36 @@ impl TaskTreeInternal {
         }
     }
 
-    fn report_all_start(&mut self) {
-        let mut task_ids = vec![];
-        std::mem::swap(&mut task_ids, &mut self.report_start);
+    #[allow(clippy::type_complexity)]
+    fn get_tasks_and_reporters(
+        &mut self,
+    ) -> (
+        Vec<Arc<TaskInternal>>,
+        Vec<Arc<TaskInternal>>,
+        Vec<Arc<dyn Reporter>>,
+    ) {
+        let mut start_ids = vec![];
+        std::mem::swap(&mut start_ids, &mut self.report_start);
+        let mut end_ids = vec![];
+        std::mem::swap(&mut end_ids, &mut self.report_end);
 
-        let mut task_clones = vec![];
+        let mut start_tasks = vec![];
+        let mut end_tasks = vec![];
 
-        for id in task_ids {
+        for id in start_ids {
             if let Ok(task_internal) = self.get_task(id) {
-                task_clones.push(Arc::new(task_internal.clone()));
+                start_tasks.push(Arc::new(task_internal.clone()));
+            }
+        }
+        for id in end_ids {
+            if let Ok(task_internal) = self.get_task(id) {
+                end_tasks.push(Arc::new(task_internal.clone()));
             }
         }
 
         let reporters = self.reporters.clone();
 
-        tokio::spawn(async move {
-            for t in task_clones {
-                for reporter in &reporters {
-                    reporter.task_start(t.clone()).await;
-                }
-            }
-        });
-    }
-
-    fn report_all_end(&mut self) {
-        let mut task_ids = vec![];
-        std::mem::swap(&mut task_ids, &mut self.report_end);
-
-        let mut task_clones = vec![];
-
-        for id in task_ids {
-            if let Ok(task_internal) = self.get_task(id) {
-                task_clones.push(Arc::new(task_internal.clone()));
-            }
-        }
-
-        let reporters = self.reporters.clone();
-
-        tokio::spawn(async move {
-            for t in task_clones {
-                for reporter in &reporters {
-                    reporter.task_end(t.clone()).await;
-                }
-            }
-        });
+        (start_tasks, end_tasks, reporters)
     }
 }
 

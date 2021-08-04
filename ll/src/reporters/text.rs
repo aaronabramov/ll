@@ -1,3 +1,4 @@
+use super::Level;
 use super::DONTPRINT_TAG;
 use crate::task_tree::{TaskInternal, TaskResult, TaskStatus};
 use chrono::prelude::*;
@@ -16,6 +17,7 @@ pub struct StdioReporter {
     /// Report every time a new task is started as well, not only when tasks are
     /// funished
     pub log_task_start: bool,
+    pub max_log_level: Level,
 }
 
 // Similar to STDOUT drain, but instead logs everything into a string
@@ -40,26 +42,31 @@ impl StdioReporter {
             timestamp_format: None,
             use_stdout: false,
             log_task_start: false,
+            max_log_level: Level::L3,
         }
     }
 
     fn report(&self, task_internal: Arc<TaskInternal>, report_type: TaskReportType) {
-        if task_internal.tags.contains(DONTPRINT_TAG) {
-            return;
-        }
+        let level = super::utils::parse_level(&task_internal);
 
-        let timestamp_format = self.timestamp_format.unwrap_or(TimestampFormat::UTC);
-        let result = make_string(
-            &task_internal,
-            timestamp_format,
-            DurationFormat::Milliseconds,
-            report_type,
-        );
+        if level <= self.max_log_level {
+            if task_internal.tags.contains(DONTPRINT_TAG) {
+                return;
+            }
 
-        if self.use_stdout {
-            println!("{}", result);
-        } else {
-            eprintln!("{}", result);
+            let timestamp_format = self.timestamp_format.unwrap_or(TimestampFormat::UTC);
+            let result = make_string(
+                &task_internal,
+                timestamp_format,
+                DurationFormat::Milliseconds,
+                report_type,
+            );
+
+            if self.use_stdout {
+                println!("{}", result);
+            } else {
+                eprintln!("{}", result);
+            }
         }
     }
 }

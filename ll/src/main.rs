@@ -1,18 +1,22 @@
+use ll::reporters::Level;
 use ll::Task;
 use std::sync::Arc;
+
+const FAIL_SOME: bool = false;
 
 #[tokio::main]
 async fn main() {
     let mut reporter = ll::reporters::StdioReporter::new();
     reporter.log_task_start = true;
     reporter.timestamp_format = Some(ll::reporters::text::TimestampFormat::Local);
+    reporter.max_log_level = Level::L1;
     ll::add_reporter(Arc::new(reporter));
-    let root_task = Task::create_new("root #nostatus");
+    let root_task = Task::create_new("root #nostatus #l0");
     ll::reporters::term_status::show().await;
     ll::task_tree::TASK_TREE.set_force_flush(true);
 
     root_task
-        .spawn("will_finish_fast", |task| async move {
+        .spawn("will_finish_fast #l3", |task| async move {
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(6000)).await;
                 task.spawn("will_spawn_after_parent_is_done", |_| async move {
@@ -79,7 +83,9 @@ async fn main() {
                                 .await
                             });
 
-                            anyhow::bail!("omg no i failed");
+                            if FAIL_SOME {
+                                anyhow::bail!("omg no i failed");
+                            }
                             #[allow(unreachable_code)]
                             Ok(())
                         })

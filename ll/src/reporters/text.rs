@@ -166,7 +166,7 @@ pub fn make_string(
 ) -> String {
     let timestamp = format_timestamp(timestamp_format, task_internal);
     let status = format_status(task_internal, duration_format, report_type);
-    let name = format_name(task_internal);
+    let name = format_name(task_internal, report_type);
     let (data, error) = if let TaskReportType::End = report_type {
         (format_data(task_internal), format_error(task_internal))
     } else {
@@ -196,14 +196,13 @@ fn format_timestamp(timestamp_format: TimestampFormat, task_internal: &TaskInter
     }
 }
 
-fn format_name(task_internal: &TaskInternal) -> ColoredString {
-    if matches!(
-        task_internal.status,
-        TaskStatus::Finished(TaskResult::Failure(_), _)
-    ) {
-        format!("[ERR] {}", task_internal.full_name()).red()
-    } else {
-        task_internal.full_name().green()
+fn format_name(task_internal: &TaskInternal, report_type: TaskReportType) -> ColoredString {
+    match (&task_internal.status, report_type) {
+        (TaskStatus::Finished(TaskResult::Failure(_), _), _) => {
+            format!("[ERR] {}", task_internal.full_name()).red()
+        }
+        (_, TaskReportType::Start) => task_internal.full_name().yellow(),
+        (_, TaskReportType::End) => task_internal.full_name().green(),
     }
 }
 

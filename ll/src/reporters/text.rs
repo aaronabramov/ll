@@ -13,6 +13,9 @@ pub struct StdioReporter {
     /// By default this reporter writes to STDERR,
     /// this flag will make it write to STDOUT instead
     pub use_stdout: bool,
+    /// Report every time a new task is started as well, not only when tasks are
+    /// funished
+    pub log_task_start: bool,
 }
 
 // Similar to STDOUT drain, but instead logs everything into a string
@@ -25,11 +28,38 @@ pub struct StringReporter {
     strip_ansi: bool,
 }
 
+#[derive(Clone, Copy)]
+pub enum TaskReportType {
+    Start,
+    End,
+}
+
 impl StdioReporter {
     pub fn new() -> Self {
         Self {
             timestamp_format: None,
             use_stdout: false,
+            log_task_start: false,
+        }
+    }
+
+    async fn report(&self, task_internal: Arc<TaskInternal>, report_type: TaskReportType) {
+        if task_internal.tags.contains(DONTPRINT_TAG) {
+            return;
+        }
+
+        let timestamp_format = self.timestamp_format.unwrap_or(TimestampFormat::UTC);
+        let result = make_string(
+            &task_internal,
+            timestamp_format,
+            DurationFormat::Milliseconds,
+            report_type,
+        );
+
+        if self.use_stdout {
+            println!("{}", result);
+        } else {
+            eprintln!("{}", result);
         }
     }
 }
@@ -51,23 +81,14 @@ pub enum DurationFormat {
 
 #[async_trait::async_trait]
 impl Reporter for StdioReporter {
+    async fn task_start(&self, task_internal: Arc<TaskInternal>) {
+        if self.log_task_start {
+            self.report(task_internal, TaskReportType::Start).await
+        }
+    }
+
     async fn task_end(&self, task_internal: Arc<TaskInternal>) {
-        if task_internal.tags.contains(DONTPRINT_TAG) {
-            return;
-        }
-
-        let timestamp_format = self.timestamp_format.unwrap_or(TimestampFormat::UTC);
-        let result = make_string(
-            &task_internal,
-            timestamp_format,
-            DurationFormat::Milliseconds,
-        );
-
-        if self.use_stdout {
-            println!("{}", result);
-        } else {
-            eprintln!("{}", result);
-        }
+        self.report(task_internal, TaskReportType::End).await
     }
 }
 
@@ -88,6 +109,26 @@ impl StringReporter {
         }
     }
 
+    async fn report(&self, task_internal: Arc<TaskInternal>, report_type: TaskReportType) {
+        if task_internal.tags.contains(DONTPRINT_TAG) {
+            return;
+        }
+        let timestamp_format = *self.timestamp_format.read().unwrap();
+        let duration_format = *self.duration_format.read().unwrap();
+        let mut result = make_string(
+            &task_internal,
+            timestamp_format,
+            duration_format,
+            report_type,
+        );
+        if self.strip_ansi {
+            result = strip_ansi(&result);
+        }
+        let mut output = self.output.lock().expect("poisoned lock");
+        output.push_str(&result);
+        output.push('\n');
+    }
+
     pub fn set_timestamp_format(&self, format: TimestampFormat) {
         *self.timestamp_format.write().unwrap() = format;
     }
@@ -103,19 +144,12 @@ impl StringReporter {
 
 #[async_trait::async_trait]
 impl Reporter for StringReporter {
+    async fn task_start(&self, task_internal: Arc<TaskInternal>) {
+        self.report(task_internal, TaskReportType::Start).await;
+    }
+
     async fn task_end(&self, task_internal: Arc<TaskInternal>) {
-        if task_internal.tags.contains(DONTPRINT_TAG) {
-            return;
-        }
-        let timestamp_format = *self.timestamp_format.read().unwrap();
-        let duration_format = *self.duration_format.read().unwrap();
-        let mut result = make_string(&task_internal, timestamp_format, duration_format);
-        if self.strip_ansi {
-            result = strip_ansi(&result);
-        }
-        let mut output = self.output.lock().expect("poisoned lock");
-        output.push_str(&result);
-        output.push('\n');
+        self.report(task_internal, TaskReportType::End).await;
     }
 }
 
@@ -130,14 +164,18 @@ pub fn make_string(
     task_internal: &TaskInternal,
     timestamp_format: TimestampFormat,
     duration_format: DurationFormat,
+    report_type: TaskReportType,
 ) -> String {
     let timestamp = format_timestamp(timestamp_format, task_internal);
+    let status = format_status(task_internal, duration_format, report_type);
     let name = format_name(task_internal);
-    let duration = format_duration(task_internal, duration_format);
-    let data = format_data(task_internal);
-    let error = format_error(task_internal);
+    let (data, error) = if let TaskReportType::End = report_type {
+        (format_data(task_internal), format_error(task_internal))
+    } else {
+        (String::new(), String::new())
+    };
 
-    let result = format!("{}{}{}{}{}", timestamp, duration, name, data, error);
+    let result = format!("{}{}{}{}{}", timestamp, status, name, data, error);
 
     result
 }
@@ -171,19 +209,31 @@ fn format_name(task_internal: &TaskInternal) -> ColoredString {
     }
 }
 
-fn format_duration(task_internal: &TaskInternal, format: DurationFormat) -> String {
-    if let TaskStatus::Finished(_, finished_at) = task_internal.status {
-        let d = finished_at.duration_since(task_internal.started_at).ok();
-        match (d, format) {
-            (Some(d), DurationFormat::Milliseconds) => format!("| {:>6}ms | ", d.as_millis())
-                .bold()
-                .dimmed()
-                .to_string(),
-            (Some(_), DurationFormat::None) => String::new(),
-            (None, _) => String::new(),
+fn format_status(
+    task_internal: &TaskInternal,
+    format: DurationFormat,
+    report_type: TaskReportType,
+) -> String {
+    match report_type {
+        TaskReportType::Start => format!("| {} | ", "STARTING".yellow()),
+        // If it's the end of the task, we'll print a timestamp
+        TaskReportType::End => {
+            if let TaskStatus::Finished(_, finished_at) = task_internal.status {
+                let d = finished_at.duration_since(task_internal.started_at).ok();
+                match (d, format) {
+                    (Some(d), DurationFormat::Milliseconds) => {
+                        format!("| {:>6}ms | ", d.as_millis())
+                            .bold()
+                            .dimmed()
+                            .to_string()
+                    }
+                    (Some(_), DurationFormat::None) => String::new(),
+                    (None, _) => String::new(),
+                }
+            } else {
+                String::new()
+            }
         }
-    } else {
-        String::new()
     }
 }
 

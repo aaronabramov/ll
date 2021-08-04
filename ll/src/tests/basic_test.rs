@@ -40,6 +40,10 @@ async fn basic_events_test() -> Result<()> {
     snapshot!(
         s.to_string(),
         "
+[ ] | STARTING | root
+[ ] | STARTING | root:test
+[ ] | STARTING | [ERR] root:test_with_data
+[ ] | STARTING | root:test_3
 [ ] root:test
 [ ] [ERR] root:test_with_data
   |      float: 5.98
@@ -101,6 +105,10 @@ Caused by:
     snapshot!(
         s.to_string(),
         "
+[ ] | STARTING | root
+[ ] | STARTING | [ERR] root:top_level
+[ ] | STARTING | [ERR] root:top_level:1_level
+[ ] | STARTING | [ERR] root:top_level:1_level:2_level
 [ ] [ERR] root:top_level:1_level:2_level
   |
   |  [Task] 2_level
@@ -165,6 +173,15 @@ async fn logger_data_test() -> Result<()> {
     snapshot!(
         s.to_string(),
         "
+[ ] | STARTING | root
+[ ] | STARTING | root:t1
+[ ] | STARTING | root:t1:has_process_id
+[ ] | STARTING | root:t1:t2
+[ ] | STARTING | root:t1:t2:has_process_and_request_id
+[ ] | STARTING | root:t1:t2:t3
+[ ] | STARTING | root:t1:t2:t3:wont_print_request_id
+[ ] | STARTING | root:t1:t2:t3:t4
+[ ] | STARTING | root:t1:t2:t3:t4:wont_print_request_id
 [ ] root:t1:has_process_id
   |      process_id: 123
 [ ] root:t1:t2:has_process_and_request_id
@@ -197,6 +214,8 @@ async fn async_test() -> Result<()> {
     snapshot!(
         s.to_string(),
         "
+[ ] | STARTING | root
+[ ] | STARTING | root:async_event
 [ ] root:async_event
   |      async_data: 5
 

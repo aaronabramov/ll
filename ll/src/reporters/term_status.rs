@@ -223,6 +223,8 @@ impl TermStatusInternal {
             TaskStatus::Finished(TaskResult::Failure(_), _) => " x ".white().on_red(),
         };
 
+        let progress = make_progress(task_internal);
+
         let duration = match task_internal.status {
             TaskStatus::Finished(_, finished_at) => {
                 finished_at.duration_since(task_internal.started_at)
@@ -230,12 +232,14 @@ impl TermStatusInternal {
             _ => task_internal.started_at.elapsed(),
         }?;
 
-        let row_desc = format!("{}{} {}", indent, status, task_internal.name);
         let secs = duration.as_secs();
         let millis = (duration.as_millis() % 1000) / 100;
-        let ts = format!("{}.{}s", secs, millis);
+        let ts = format!(" [{}.{}s] ", secs, millis).dimmed();
 
-        Ok(format!("{:<140}{:>8}", row_desc, ts))
+        Ok(format!(
+            "{}{}{}{}{}",
+            indent, status, ts, progress, task_internal.name
+        ))
     }
 
     fn clear(&self, stdio: &mut impl Write) -> Result<()> {
@@ -247,5 +251,20 @@ impl TermStatusInternal {
         }
 
         Ok(())
+    }
+}
+
+fn make_progress(task: &TaskInternal) -> String {
+    const PROGRESS_BAR_LEN: i64 = 30;
+
+    if let Some((done, total)) = &task.progress {
+        let pct_done = (done * 100) / total;
+        let done_blocks_len = std::cmp::min((PROGRESS_BAR_LEN * pct_done) / 100, PROGRESS_BAR_LEN);
+        let todo_blocks_len = PROGRESS_BAR_LEN - done_blocks_len;
+        let done_blocks = " ".repeat(done_blocks_len as usize).on_bright_green();
+        let todo_blocks = ".".repeat(todo_blocks_len as usize).on_black();
+        format!(" [{}{}] {}/{} ", done_blocks, todo_blocks, done, total)
+    } else {
+        String::new()
     }
 }

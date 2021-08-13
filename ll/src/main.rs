@@ -40,8 +40,11 @@ async fn main() {
 
             tokio::spawn(async move {
                 t_clone
-                    .spawn("detached_async_task", |_| async move {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(8400)).await;
+                    .spawn("detached_async_task", |task| async move {
+                        for i in 0..=1000 {
+                            task.progress(i, 1000);
+                            tokio::time::sleep(tokio::time::Duration::from_millis(8)).await;
+                        }
                         Ok(())
                     })
                     .await

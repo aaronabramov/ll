@@ -52,6 +52,11 @@ pub struct TaskInternal {
     pub data: Data,
     pub data_transitive: Data,
     pub tags: BTreeSet<String>,
+    /// optional tuple containing values indicating task progress, where
+    /// first value is how many items finished and the second value is how many
+    /// items there are total. E.g. if it's a task processing 10 pieces of work,
+    /// (1, 10) would mean that 1 out of ten pieces is done.
+    pub progress: Option<(i64, i64)>,
 }
 
 #[derive(Clone)]
@@ -202,6 +207,7 @@ impl TaskTree {
             data: Data::empty(),
             data_transitive,
             tags,
+            progress: None,
         };
 
         tree.tasks_internal.insert(id, task_internal);
@@ -235,6 +241,13 @@ impl TaskTree {
         let mut tree = self.tree_internal.write().unwrap();
         if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
             task_internal.data_transitive.add(key, value);
+        }
+    }
+
+    pub fn task_progress(&self, id: UniqID, done: i64, total: i64) {
+        let mut tree = self.tree_internal.write().unwrap();
+        if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
+            task_internal.progress = Some((done, total));
         }
     }
 

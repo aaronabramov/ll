@@ -25,4 +25,5 @@ pub enum Level {
 pub trait Reporter: Send + Sync {
     fn task_start(&self, _task: Arc<TaskInternal>) {}
     fn task_end(&self, _task: Arc<TaskInternal>) {}
+    fn task_progress(&self, _task: Arc<TaskInternal>) {}
 }

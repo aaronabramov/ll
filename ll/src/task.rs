@@ -71,6 +71,10 @@ impl Task {
     pub fn data_transitive<D: Into<DataValue>>(&self, name: &str, data: D) {
         self.0.task_tree.add_data_transitive(self.0.id, name, data);
     }
+
+    pub fn progress(&self, done: i64, total: i64) {
+        self.0.task_tree.task_progress(self.0.id, done, total);
+    }
 }
 
 impl Drop for TaskData {

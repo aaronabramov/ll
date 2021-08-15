@@ -42,7 +42,7 @@ impl StdioReporter {
             timestamp_format: None,
             use_stdout: false,
             log_task_start: false,
-            max_log_level: Level::L3,
+            max_log_level: Level::default(),
         }
     }
 

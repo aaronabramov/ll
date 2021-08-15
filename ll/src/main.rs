@@ -52,7 +52,7 @@ async fn main() {
             });
 
             let (a, b) = tokio::join!(
-                task.spawn("task_2", |task| async move {
+                task.spawn("task_2 #l3", |task| async move {
                     task.data("hey", 1);
                     task.data("yo", "sup");
                     task.data("dontprint #dontprint", 4);

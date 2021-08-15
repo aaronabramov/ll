@@ -1,3 +1,4 @@
+use super::Level;
 use crate::task_tree::{TaskInternal, TaskResult, TaskStatus, TaskTree, TASK_TREE};
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
@@ -101,6 +102,7 @@ type Depth = Vec<bool>;
 pub struct TermStatusInternal {
     current_height: usize,
     task_tree: Arc<TaskTree>,
+    pub max_log_level: Level,
     enabled: bool,
 }
 
@@ -109,6 +111,7 @@ impl TermStatusInternal {
         Self {
             current_height: 0,
             task_tree,
+            max_log_level: Level::default(),
             enabled: false,
         }
     }
@@ -146,17 +149,14 @@ impl TermStatusInternal {
         while let Some((id, depth)) = stack.pop() {
             let task = tree.get_task(id).context("must be present")?;
 
-            let dontprint = task.tags.contains(NOSTATUS_TAG);
+            let dontprint = !self.should_print(task);
 
             let children_iter = parent_to_children.get(&id).into_iter().flatten().peekable();
             let mut append_to_stack = vec![];
 
             let last_visible_child = children_iter
                 .clone()
-                .filter(|id| {
-                    tree.get_task(**id)
-                        .map_or(false, |t| !t.tags.contains(NOSTATUS_TAG))
-                })
+                .filter(|id| tree.get_task(**id).map_or(false, |t| self.should_print(t)))
                 .last();
 
             // we still need to DFS the ones that we don't print to make sure
@@ -182,6 +182,11 @@ impl TermStatusInternal {
         }
 
         Ok(rows)
+    }
+
+    fn should_print(&self, task: &TaskInternal) -> bool {
+        let level = super::utils::parse_level(task);
+        !task.tags.contains(NOSTATUS_TAG) && (level <= self.max_log_level)
     }
 
     fn task_row(&self, task_internal: &TaskInternal, mut depth: Depth) -> Result<String> {

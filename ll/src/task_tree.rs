@@ -273,7 +273,7 @@ impl TaskTree {
         }
     }
 
-    fn report_all(&self) {
+    pub fn report_all(&self) {
         let mut tree = self.tree_internal.write().unwrap();
         let (start_tasks, end_tasks, reporters) = tree.get_tasks_and_reporters();
         drop(tree);

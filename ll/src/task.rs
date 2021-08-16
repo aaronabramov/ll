@@ -69,7 +69,9 @@ impl Task {
     }
 
     pub fn data_transitive<D: Into<DataValue>>(&self, name: &str, data: D) {
-        self.0.task_tree.add_data_transitive(self.0.id, name, data);
+        self.0
+            .task_tree
+            .add_data_transitive_for_task(self.0.id, name, data);
     }
 
     pub fn progress(&self, done: i64, total: i64) {

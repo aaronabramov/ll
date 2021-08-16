@@ -150,6 +150,7 @@ Caused by:
 #[tokio::test]
 async fn logger_data_test() -> Result<()> {
     let (tt, s) = setup();
+    tt.add_data_transitive("tree_transitive_data", 5);
 
     let root = tt.create_task("root");
 
@@ -184,13 +185,17 @@ async fn logger_data_test() -> Result<()> {
 [ ] | STARTING | root:t1:t2:t3:t4:wont_print_request_id
 [ ] root:t1:has_process_id
   |      process_id: 123
+  |      tree_transitive_data: 5
 [ ] root:t1:t2:has_process_and_request_id
   |      process_id: 123
   |      request_id: 234
+  |      tree_transitive_data: 5
 [ ] root:t1:t2:t3:wont_print_request_id
   |      process_id: 123
+  |      tree_transitive_data: 5
 [ ] root:t1:t2:t3:t4:wont_print_request_id
   |      process_id: 123
+  |      tree_transitive_data: 5
 
 "
     );

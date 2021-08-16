@@ -1,7 +1,7 @@
 use crate::level::Level;
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Data {
     pub map: BTreeMap<String, DataEntry>,
 }

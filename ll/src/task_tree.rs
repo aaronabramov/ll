@@ -40,6 +40,7 @@ pub(crate) struct TaskTreeInternal {
     tasks_marked_for_deletion: HashMap<UniqID, SystemTime>,
     report_start: Vec<UniqID>,
     report_end: Vec<UniqID>,
+    data_transitive: Data,
 }
 
 #[derive(Clone)]
@@ -177,13 +178,13 @@ impl TaskTree {
         let mut tree = self.tree_internal.write().unwrap();
 
         let mut parent_names = vec![];
-        let mut data_transitive = Data::empty();
+        let mut data_transitive = tree.data_transitive.clone();
         let (name, tags) = crate::utils::extract_tags(name.into());
         let id = UniqID::new();
         if let Some(parent_task) = parent.and_then(|pid| tree.tasks_internal.get(&pid)) {
             parent_names = parent_task.parent_names.clone();
             parent_names.push(parent_task.name.clone());
-            data_transitive = parent_task.data_transitive.clone();
+            data_transitive.merge(&parent_task.data_transitive);
             let parent_id = parent_task.id;
 
             tree.parent_to_children
@@ -232,7 +233,7 @@ impl TaskTree {
         }
     }
 
-    pub fn add_data_transitive<S: Into<String>, D: Into<DataValue>>(
+    pub(crate) fn add_data_transitive_for_task<S: Into<String>, D: Into<DataValue>>(
         &self,
         id: UniqID,
         key: S,
@@ -242,6 +243,13 @@ impl TaskTree {
         if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
             task_internal.data_transitive.add(key, value);
         }
+    }
+
+    /// Add transitive data to the task tree. This transitive data will be
+    /// added to every task created in this task tree
+    pub fn add_data_transitive<S: Into<String>, D: Into<DataValue>>(&self, key: S, value: D) {
+        let mut tree = self.tree_internal.write().unwrap();
+        tree.data_transitive.add(key, value);
     }
 
     pub fn task_progress(&self, id: UniqID, done: i64, total: i64) {

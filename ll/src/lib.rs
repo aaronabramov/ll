@@ -22,7 +22,7 @@ Example
 use ll::Task;
 
 async fn do_something() {
-    ll::reporters::term_status::show().await;
+    ll::reporters::term_status::show();
 
     let root_task = Task::create_new("root_task");
     root_task.spawn("subtask_1", |task| async move {

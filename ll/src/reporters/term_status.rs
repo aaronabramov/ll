@@ -14,11 +14,11 @@ lazy_static::lazy_static! {
     pub static ref TERM_STATUS: TermStatus = TermStatus::new(TASK_TREE.clone());
 }
 
-pub async fn show() {
+pub fn show() {
     TERM_STATUS.show();
 }
 
-pub async fn hide() {
+pub fn hide() {
     TERM_STATUS.hide();
 }
 

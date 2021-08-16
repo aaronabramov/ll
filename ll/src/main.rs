@@ -12,7 +12,7 @@ async fn main() {
     reporter.max_log_level = Level::L1;
     ll::add_reporter(Arc::new(reporter));
     let root_task = Task::create_new("root #nostatus #l0");
-    ll::reporters::term_status::show().await;
+    ll::reporters::term_status::show();
     ll::task_tree::TASK_TREE.set_force_flush(true);
 
     root_task

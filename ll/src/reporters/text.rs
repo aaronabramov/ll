@@ -171,7 +171,7 @@ pub fn make_string(
     duration_format: DurationFormat,
     report_type: TaskReportType,
 ) -> String {
-    let timestamp = format_timestamp(timestamp_format, task_internal);
+    let timestamp = format_timestamp(timestamp_format, task_internal, report_type);
     let status = format_status(task_internal, duration_format, report_type);
     let name = format_name(task_internal, report_type);
     let (data, error) = if let TaskReportType::End = report_type {
@@ -185,20 +185,42 @@ pub fn make_string(
     result
 }
 
-fn format_timestamp(timestamp_format: TimestampFormat, task_internal: &TaskInternal) -> String {
+fn format_timestamp(
+    timestamp_format: TimestampFormat,
+    task_internal: &TaskInternal,
+    report_type: TaskReportType,
+) -> String {
+    let datetime: Option<DateTime<Utc>> = match report_type {
+        TaskReportType::Start => Some(task_internal.started_at.into()),
+        TaskReportType::End => {
+            if let TaskStatus::Finished(_, at) = task_internal.status {
+                Some(at.into())
+            } else {
+                None
+            }
+        }
+    };
+
     match timestamp_format {
         TimestampFormat::None => format!(""),
         TimestampFormat::Redacted => "[ ] ".to_string(), // for testing
         TimestampFormat::Local => {
-            let datetime: DateTime<Local> = task_internal.started_at.into();
-            let rounded = datetime.round_subsecs(0);
-            let formatted = rounded.format("%I:%M:%S%p");
-            format!("[{}] ", formatted).dimmed().to_string()
+            if let Some(datetime) = datetime {
+                let datetime: DateTime<Local> = datetime.into();
+                let rounded = datetime.round_subsecs(0);
+                let formatted = rounded.format("%I:%M:%S%p");
+                format!("[{}] ", formatted).dimmed().to_string()
+            } else {
+                "[          ]".to_string()
+            }
         }
         TimestampFormat::UTC => {
-            let datetime: DateTime<Utc> = task_internal.started_at.into();
-            let rounded = datetime.round_subsecs(0);
-            format!("[{:?}] ", rounded).dimmed().to_string()
+            if let Some(datetime) = datetime {
+                let rounded = datetime.round_subsecs(0);
+                format!("[{:?}] ", rounded).dimmed().to_string()
+            } else {
+                "[                    ]".to_string()
+            }
         }
     }
 }

@@ -8,7 +8,7 @@ const FAIL_SOME: bool = false;
 async fn main() {
     let mut reporter = ll::reporters::StdioReporter::new();
     reporter.log_task_start = true;
-    reporter.timestamp_format = Some(ll::reporters::text::TimestampFormat::Local);
+    // reporter.timestamp_format = Some(ll::reporters::text::TimestampFormat::Local);
     reporter.max_log_level = Level::L1;
     ll::add_reporter(Arc::new(reporter));
     let root_task = Task::create_new("root #nostatus #l0");

@@ -15,7 +15,11 @@ lazy_static::lazy_static! {
 }
 
 pub fn show() {
-    TERM_STATUS.show();
+    // Only enable it if it's a TTY terminal, otherwise output
+    // can get super messy.
+    if crossterm::tty::IsTty::is_tty(&std::io::stderr()) {
+        TERM_STATUS.show();
+    }
 }
 
 pub fn hide() {

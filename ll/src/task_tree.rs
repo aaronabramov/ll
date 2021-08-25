@@ -12,8 +12,6 @@ use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
 
-const REMOVE_TASK_AFTER_DONE_MS: u64 = 5000;
-
 lazy_static::lazy_static! {
     pub static ref TASK_TREE: Arc<TaskTree>  = TaskTree::new();
 }
@@ -41,6 +39,7 @@ pub(crate) struct TaskTreeInternal {
     report_start: Vec<UniqID>,
     report_end: Vec<UniqID>,
     data_transitive: Data,
+    remove_task_after_done_ms: u64,
 }
 
 #[derive(Clone)]
@@ -74,7 +73,21 @@ pub enum TaskResult {
 
 impl TaskTree {
     pub fn new() -> Arc<Self> {
-        let s = Arc::new(Self::default());
+        let s = Arc::new(Self {
+            tree_internal: RwLock::new(TaskTreeInternal {
+                tasks_internal: BTreeMap::new(),
+                parent_to_children: BTreeMap::new(),
+                child_to_parents: BTreeMap::new(),
+                root_tasks: BTreeSet::new(),
+                reporters: vec![],
+                tasks_marked_for_deletion: HashMap::new(),
+                report_start: vec![],
+                report_end: vec![],
+                data_transitive: Data::empty(),
+                remove_task_after_done_ms: 0,
+            }),
+            force_flush: AtomicBool::new(false),
+        });
         let clone = s.clone();
         tokio::spawn(async move {
             loop {
@@ -345,7 +358,7 @@ impl TaskTreeInternal {
         let mut will_delete = vec![];
         for (id, time) in &self.tasks_marked_for_deletion {
             if let Ok(elapsed) = time.elapsed() {
-                if elapsed > Duration::from_millis(REMOVE_TASK_AFTER_DONE_MS) {
+                if elapsed > Duration::from_millis(self.remove_task_after_done_ms) {
                     will_delete.push(*id);
                 }
             }

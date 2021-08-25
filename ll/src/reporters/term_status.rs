@@ -122,6 +122,7 @@ impl TermStatusInternal {
 
     fn print(&mut self, stdio: &mut impl Write) -> Result<()> {
         let rows = self.make_status_rows()?;
+
         let height = rows.len();
 
         if let (0, 0) = (height, self.current_height) {
@@ -183,6 +184,15 @@ impl TermStatusInternal {
             if !dontprint {
                 rows.push(self.task_row(task, depth)?);
             }
+        }
+
+        let (_, term_height) = crossterm::terminal::size().unwrap_or((50, 50));
+        let max_height = term_height as usize - 2;
+
+        if rows.len() > max_height {
+            let trimmed = rows.len() - max_height;
+            rows = rows.into_iter().take(max_height).collect();
+            rows.push(format!(".......{} more tasks.......", trimmed))
         }
 
         Ok(rows)

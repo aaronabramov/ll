@@ -148,6 +148,166 @@ Caused by:
 }
 
 #[tokio::test]
+async fn error_chain_test_no_transitive() -> Result<()> {
+    let (tt, s) = setup();
+
+    tt.attach_transitive_data_to_errors_default(false);
+    tt.add_data_transitive("transitive_data", "transitive_value");
+    let root = tt.create_task("root");
+    let result = root.spawn_sync("top_level", |t| {
+        t.data("top_level_data", 5);
+
+        t.spawn_sync("1_level", |t| {
+            t.data("1_level_data", 9);
+            t.attach_transitive_data_to_errors(true);
+            t.spawn_sync("2_level", |_| {
+                anyhow::ensure!(false, "oh noes, this fails");
+                Ok(())
+            })
+        })?;
+        Ok(())
+    });
+
+    sleep().await;
+    snapshot!(
+        format!("{:?}", result.unwrap_err()),
+        "
+[Task] top_level
+  top_level_data: 5
+
+
+Caused by:
+    0: [Task] 1_level
+         1_level_data: 9
+         transitive_data: transitive_value
+       
+    1: [Task] 2_level
+       
+    2: oh noes, this fails
+"
+    );
+
+    snapshot!(
+        s.to_string(),
+        "
+[ ] | STARTING | root
+[ ] | STARTING | [ERR] root:top_level
+[ ] | STARTING | [ERR] root:top_level:1_level
+[ ] | STARTING | [ERR] root:top_level:1_level:2_level
+[ ] [ERR] root:top_level:1_level:2_level
+  |      transitive_data: transitive_value
+  |
+  |  [Task] 2_level
+  |  
+  |  
+  |  Caused by:
+  |      oh noes, this fails
+[ ] [ERR] root:top_level:1_level
+  |      1_level_data: 9
+  |      transitive_data: transitive_value
+  |
+  |  [Task] 1_level
+  |    1_level_data: 9
+  |    transitive_data: transitive_value
+  |  
+  |  
+  |  Caused by:
+  |      0: [Task] 2_level
+  |         
+  |      1: oh noes, this fails
+[ ] [ERR] root:top_level
+  |      top_level_data: 5
+  |      transitive_data: transitive_value
+  |
+  |  [Task] top_level
+  |    top_level_data: 5
+  |  
+  |  
+  |  Caused by:
+  |      0: [Task] 1_level
+  |           1_level_data: 9
+  |           transitive_data: transitive_value
+  |         
+  |      1: [Task] 2_level
+  |         
+  |      2: oh noes, this fails
+
+"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn error_chain_test_hide_errors() -> Result<()> {
+    let (tt, s) = setup();
+
+    tt.hide_errors_default_msg(Some(" <error omitted>"));
+
+    let root = tt.create_task("root");
+    let result = root.spawn_sync("top_level", |t| {
+        t.hide_error_msg(None);
+        t.data("top_level_data", 5);
+
+        t.spawn_sync("1_level", |t| {
+            t.data("1_level_data", 9);
+            t.spawn_sync("2_level", |_| {
+                anyhow::ensure!(false, "oh noes, this fails");
+                Ok(())
+            })
+        })?;
+        Ok(())
+    });
+
+    sleep().await;
+    snapshot!(
+        format!("{:?}", result.unwrap_err()),
+        "
+[Task] top_level
+  top_level_data: 5
+
+
+Caused by:
+    0: [Task] 1_level
+         1_level_data: 9
+       
+    1: [Task] 2_level
+       
+    2: oh noes, this fails
+"
+    );
+
+    snapshot!(
+        s.to_string(),
+        "
+[ ] | STARTING | root
+[ ] | STARTING | [ERR] root:top_level
+[ ] | STARTING | [ERR] root:top_level:1_level
+[ ] | STARTING | [ERR] root:top_level:1_level:2_level
+[ ] [ERR] root:top_level:1_level:2_level <error omitted>
+[ ] [ERR] root:top_level:1_level
+  |      1_level_data: 9
+ <error omitted>
+[ ] [ERR] root:top_level
+  |      top_level_data: 5
+  |
+  |  [Task] top_level
+  |    top_level_data: 5
+  |  
+  |  
+  |  Caused by:
+  |      0: [Task] 1_level
+  |           1_level_data: 9
+  |         
+  |      1: [Task] 2_level
+  |         
+  |      2: oh noes, this fails
+
+"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn logger_data_test() -> Result<()> {
     let (tt, s) = setup();
     tt.add_data_transitive("tree_transitive_data", 5);

@@ -174,11 +174,15 @@ pub fn make_string(
     let timestamp = format_timestamp(timestamp_format, task_internal, report_type);
     let status = format_status(task_internal, duration_format, report_type);
     let name = format_name(task_internal, report_type);
-    let (data, error) = if let TaskReportType::End = report_type {
+    let (mut data, error) = if let TaskReportType::End = report_type {
         (format_data(task_internal), format_error(task_internal))
     } else {
         (String::new(), String::new())
     };
+
+    if !data.is_empty() && task_internal.hide_errors.is_some() {
+        data = format!("{}\n", data);
+    }
 
     let result = format!("{}{}{}{}{}", timestamp, status, name, data, error);
 
@@ -283,6 +287,9 @@ fn format_data(task_internal: &TaskInternal) -> String {
 
 fn format_error(task_internal: &TaskInternal) -> String {
     let mut result = String::new();
+    if let Some(msg) = &task_internal.hide_errors {
+        return msg.to_string();
+    }
     if let TaskStatus::Finished(TaskResult::Failure(error_msg), _) = &task_internal.status {
         result.push_str("\n  |\n");
         let error_log = error_msg

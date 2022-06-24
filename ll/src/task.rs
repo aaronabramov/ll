@@ -77,6 +77,31 @@ impl Task {
     pub fn progress(&self, done: i64, total: i64) {
         self.0.task_tree.task_progress(self.0.id, done, total);
     }
+
+    /// Reporters can use this flag to choose to not report errors.
+    /// This is useful for cases where there's a large task chain and every
+    /// single task reports a partial errors (that gets built up with each task)
+    /// It would make sense to report it only once at the top level (thrift
+    /// request, cli call, etc) and only mark other tasks.
+    /// If set to Some, the message inside is what would be reported by default
+    /// instead of reporting errors to avoid confusion (e.g. "error was hidden,
+    /// see ...")
+    /// see [hide_errors_default_msg()](crate::task_tree::TaskTree::hide_errors_default_msg)
+    pub fn hide_error_msg(&self, msg: Option<String>) {
+        let msg = msg.map(Arc::new);
+        self.0.task_tree.hide_error_msg_for_task(self.0.id, msg);
+    }
+
+    /// When errors occur, we attach task data to it in the description.
+    /// If set to false, only task direct data will be attached and not
+    /// transitive data. This is useful sometimes to remove the noise of
+    /// transitive data appearing in every error in the chain (e.g. hostname)
+    /// see [attach_transitive_data_to_errors_default()](crate::task_tree::TaskTree::attach_transitive_data_to_errors_default)
+    pub fn attach_transitive_data_to_errors(&self, val: bool) {
+        self.0
+            .task_tree
+            .attach_transitive_data_to_errors_for_task(self.0.id, val);
+    }
 }
 
 impl Drop for TaskData {

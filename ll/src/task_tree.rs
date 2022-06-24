@@ -40,6 +40,8 @@ pub(crate) struct TaskTreeInternal {
     report_end: Vec<UniqID>,
     data_transitive: Data,
     remove_task_after_done_ms: u64,
+    hide_errors_default_msg: Option<Arc<String>>,
+    attach_transitive_data_to_errors_default: bool,
 }
 
 #[derive(Clone)]
@@ -57,6 +59,8 @@ pub struct TaskInternal {
     /// items there are total. E.g. if it's a task processing 10 pieces of work,
     /// (1, 10) would mean that 1 out of ten pieces is done.
     pub progress: Option<(i64, i64)>,
+    pub hide_errors: Option<Arc<String>>,
+    pub attach_transitive_data_to_errors: bool,
 }
 
 #[derive(Clone)]
@@ -85,6 +89,8 @@ impl TaskTree {
                 report_end: vec![],
                 data_transitive: Data::empty(),
                 remove_task_after_done_ms: 0,
+                hide_errors_default_msg: None,
+                attach_transitive_data_to_errors_default: true,
             }),
             force_flush: AtomicBool::new(false),
         });
@@ -141,9 +147,15 @@ impl TaskTree {
             let mut desc = String::from("[Task]");
             if let Some(task_internal) = self.get_cloned_task(id) {
                 desc.push_str(&format!(" {}", task_internal.name));
-                for (k, v) in task_internal.all_data() {
-                    desc.push_str(&format!("\n  {}: {}", k, v.0));
-                }
+                if task_internal.attach_transitive_data_to_errors {
+                    for (k, v) in task_internal.all_data() {
+                        desc.push_str(&format!("\n  {}: {}", k, v.0));
+                    }
+                } else {
+                    for (k, v) in &task_internal.data.map {
+                        desc.push_str(&format!("\n  {}: {}", k, v.0));
+                    }
+                };
                 if !desc.is_empty() {
                     desc.push('\n');
                 }
@@ -222,6 +234,8 @@ impl TaskTree {
             data_transitive,
             tags,
             progress: None,
+            hide_errors: tree.hide_errors_default_msg.clone(),
+            attach_transitive_data_to_errors: tree.attach_transitive_data_to_errors_default,
         };
 
         tree.tasks_internal.insert(id, task_internal);
@@ -255,6 +269,42 @@ impl TaskTree {
         let mut tree = self.tree_internal.write().unwrap();
         if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
             task_internal.data_transitive.add(key, value);
+        }
+    }
+    /// Reporters can use this flag to choose to not report errors.
+    /// This is useful for cases where there's a large task chain and every
+    /// single task reports a partial errors (that gets built up with each task)
+    /// It would make sense to report it only once at the top level (thrift
+    /// request, cli call, etc) and only mark other tasks.
+    /// If set to Some, the message inside is what would be reported by default
+    /// instead of reporting errors to avoid confusion (e.g. "error was hidden,
+    /// see ...")
+    pub fn hide_errors_default_msg<S: Into<String>>(&self, msg: Option<S>) {
+        let mut tree = self.tree_internal.write().unwrap();
+        let msg = msg.map(|msg| Arc::new(msg.into()));
+        tree.hide_errors_default_msg = msg;
+    }
+
+    pub(crate) fn hide_error_msg_for_task(&self, id: UniqID, msg: Option<Arc<String>>) {
+        let mut tree = self.tree_internal.write().unwrap();
+        if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
+            task_internal.hide_errors = msg;
+        }
+    }
+
+    /// When errors occur, we attach task data to it in the description.
+    /// If set to false, only task direct data will be attached and not
+    /// transitive data. This is useful sometimes to remove the noise of
+    /// transitive data appearing in every error in the chain (e.g. hostname)
+    pub fn attach_transitive_data_to_errors_default(&self, val: bool) {
+        let mut tree = self.tree_internal.write().unwrap();
+        tree.attach_transitive_data_to_errors_default = val;
+    }
+
+    pub(crate) fn attach_transitive_data_to_errors_for_task(&self, id: UniqID, val: bool) {
+        let mut tree = self.tree_internal.write().unwrap();
+        if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
+            task_internal.attach_transitive_data_to_errors = val;
         }
     }
 

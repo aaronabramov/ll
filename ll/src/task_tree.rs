@@ -280,7 +280,7 @@ impl TaskTree {
     /// If force_flush set to true, this function will block the thread until everything
     /// is reported. Useful for cases when the process exits before all async events
     /// are reported and stuff is missing from stdout.
-    fn maybe_force_flush(&self) {
+    pub fn maybe_force_flush(&self) {
         if self.force_flush.load(Ordering::SeqCst) {
             self.report_all();
         }

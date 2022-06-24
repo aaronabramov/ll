@@ -1,4 +1,4 @@
-use crate::{task_tree::TaskTree, StringReporter};
+use crate::{task_tree::TaskTree, ErrorFormatter, StringReporter};
 use anyhow::Result;
 use k9::*;
 use std::{sync::Arc, time::Duration};
@@ -301,6 +301,86 @@ Caused by:
   |      1: [Task] 2_level
   |         
   |      2: oh noes, this fails
+
+"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn error_chain_test_error_formatter() -> Result<()> {
+    let (tt, s) = setup();
+
+    tt.hide_errors_default_msg(Some(" <error omitted>"));
+
+    struct CustomFormatter {}
+
+    impl ErrorFormatter for CustomFormatter {
+        fn format_error(&self, err: &anyhow::Error) -> String {
+            err.chain()
+                .into_iter()
+                .rev()
+                .enumerate()
+                .map(|(i, e)| format!("{} --> {}", i, e.to_string().trim()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+    }
+
+    tt.set_error_formatter(Some(Arc::new(CustomFormatter {})));
+    let root = tt.create_task("root");
+    let result = root.spawn_sync("top_level", |t| {
+        t.hide_error_msg(None);
+        t.data("top_level_data", 5);
+
+        t.spawn_sync("1_level", |t| {
+            t.data("1_level_data", 9);
+            t.spawn_sync("2_level", |_| {
+                anyhow::ensure!(false, "oh noes, this fails");
+                Ok(())
+            })
+        })?;
+        Ok(())
+    });
+
+    sleep().await;
+    snapshot!(
+        format!("{:?}", result.unwrap_err()),
+        "
+[Task] top_level
+  top_level_data: 5
+
+
+Caused by:
+    0: [Task] 1_level
+         1_level_data: 9
+       
+    1: [Task] 2_level
+       
+    2: oh noes, this fails
+"
+    );
+
+    snapshot!(
+        s.to_string(),
+        "
+[ ] | STARTING | root
+[ ] | STARTING | [ERR] root:top_level
+[ ] | STARTING | [ERR] root:top_level:1_level
+[ ] | STARTING | [ERR] root:top_level:1_level:2_level
+[ ] [ERR] root:top_level:1_level:2_level <error omitted>
+[ ] [ERR] root:top_level:1_level
+  |      1_level_data: 9
+ <error omitted>
+[ ] [ERR] root:top_level
+  |      top_level_data: 5
+  |
+  |  0 --> oh noes, this fails
+  |  1 --> [Task] 2_level
+  |  2 --> [Task] 1_level
+  |    1_level_data: 9
+  |  3 --> [Task] top_level
+  |    top_level_data: 5
 
 "
     );

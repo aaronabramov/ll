@@ -20,7 +20,10 @@ pub fn add_reporter(reporter: Arc<dyn Reporter>) {
     TASK_TREE.add_reporter(reporter);
 }
 
-#[derive(Default)]
+pub trait ErrorFormatter: Send + Sync {
+    fn format_error(&self, err: &anyhow::Error) -> String;
+}
+
 pub struct TaskTree {
     pub(crate) tree_internal: RwLock<TaskTreeInternal>,
     /// If true, it will block the current thread until all task events are
@@ -28,7 +31,6 @@ pub struct TaskTree {
     force_flush: AtomicBool,
 }
 
-#[derive(Default)]
 pub(crate) struct TaskTreeInternal {
     tasks_internal: BTreeMap<UniqID, TaskInternal>,
     parent_to_children: BTreeMap<UniqID, BTreeSet<UniqID>>,
@@ -42,6 +44,7 @@ pub(crate) struct TaskTreeInternal {
     remove_task_after_done_ms: u64,
     hide_errors_default_msg: Option<Arc<String>>,
     attach_transitive_data_to_errors_default: bool,
+    error_formatter: Option<Arc<dyn ErrorFormatter>>,
 }
 
 #[derive(Clone)]
@@ -91,6 +94,7 @@ impl TaskTree {
                 remove_task_after_done_ms: 0,
                 hide_errors_default_msg: None,
                 attach_transitive_data_to_errors_default: true,
+                error_formatter: None,
             }),
             force_flush: AtomicBool::new(false),
         });
@@ -162,7 +166,20 @@ impl TaskTree {
             }
             desc
         });
-        self.mark_done(id, result.as_ref().err().map(|e| format!("{:?}", e)));
+        let error_msg = if let Err(err) = &result {
+            let formatter = {
+                let formatter = self.tree_internal.read().unwrap().error_formatter.clone();
+                formatter
+            };
+            if let Some(formatter) = formatter {
+                Some(formatter.format_error(err))
+            } else {
+                Some(format!("{:?}", err))
+            }
+        } else {
+            None
+        };
+        self.mark_done(id, error_msg);
         self.maybe_force_flush();
         result
     }
@@ -306,6 +323,16 @@ impl TaskTree {
         if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
             task_internal.attach_transitive_data_to_errors = val;
         }
+    }
+
+    /// Add a custom error formatter to change how error messages look in
+    /// reporters.
+    /// Unfortunately it is not configurable per reporter, because errors
+    /// normally don't implement `Clone` and it will be almost impossible to add
+    /// reference counters to all errors in all chains
+    pub fn set_error_formatter(&self, error_formatter: Option<Arc<dyn ErrorFormatter>>) {
+        let mut tree = self.tree_internal.write().unwrap();
+        tree.error_formatter = error_formatter;
     }
 
     /// Add transitive data to the task tree. This transitive data will be

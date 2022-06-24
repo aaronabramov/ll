@@ -202,7 +202,7 @@ fn format_timestamp(
     };
 
     match timestamp_format {
-        TimestampFormat::None => format!(""),
+        TimestampFormat::None => String::new(),
         TimestampFormat::Redacted => "[ ] ".to_string(), // for testing
         TimestampFormat::Local => {
             if let Some(datetime) = datetime {

@@ -79,7 +79,7 @@ impl std::fmt::Display for DataValue {
             DataValue::String(string) => string.to_owned(),
             DataValue::Int(i) => format!("{}", i),
             DataValue::Float(f) => format!("{}", f),
-            DataValue::None => format!(""),
+            DataValue::None => String::new(),
         };
         write!(f, "{}", result)
     }

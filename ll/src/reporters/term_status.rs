@@ -277,6 +277,10 @@ fn make_progress(task: &TaskInternal) -> String {
     const PROGRESS_BAR_LEN: i64 = 30;
 
     if let Some((done, total)) = &task.progress {
+        if *total == 0 {
+            // otherwise we'll divide by 0 and it'll panic
+            return String::new();
+        }
         let pct_done = (done * 100) / total;
         let done_blocks_len = std::cmp::min((PROGRESS_BAR_LEN * pct_done) / 100, PROGRESS_BAR_LEN);
         let todo_blocks_len = PROGRESS_BAR_LEN - done_blocks_len;

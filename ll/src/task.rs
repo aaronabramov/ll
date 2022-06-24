@@ -41,8 +41,8 @@ impl Task {
     pub async fn spawn_new<F, FT, T>(name: &str, f: F) -> Result<T>
     where
         F: FnOnce(Task) -> FT,
-        FT: Future<Output = Result<T>> + Send + 'static,
-        T: Send + 'static,
+        FT: Future<Output = Result<T>> + Send,
+        T: Send,
     {
         TASK_TREE.spawn(name, f, None).await
     }
@@ -59,7 +59,7 @@ impl Task {
     pub fn spawn_sync<F, T>(&self, name: &str, f: F) -> Result<T>
     where
         F: FnOnce(Task) -> Result<T>,
-        T: Send + 'static,
+        T: Send,
     {
         self.0.task_tree.spawn_sync(name, f, Some(self.0.id))
     }

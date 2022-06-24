@@ -44,24 +44,27 @@ impl Task {
         FT: Future<Output = Result<T>> + Send,
         T: Send,
     {
-        TASK_TREE.spawn(name, f, None).await
+        TASK_TREE.spawn(name.into(), f, None).await
     }
 
-    pub async fn spawn<F, FT, T>(&self, name: &str, f: F) -> Result<T>
+    pub async fn spawn<F, FT, T, S: Into<String>>(&self, name: S, f: F) -> Result<T>
     where
         F: FnOnce(Task) -> FT,
         FT: Future<Output = Result<T>> + Send,
         T: Send,
     {
-        self.0.task_tree.spawn(name, f, Some(self.0.id)).await
+        self.0
+            .task_tree
+            .spawn(name.into(), f, Some(self.0.id))
+            .await
     }
 
-    pub fn spawn_sync<F, T>(&self, name: &str, f: F) -> Result<T>
+    pub fn spawn_sync<F, T, S: Into<String>>(&self, name: S, f: F) -> Result<T>
     where
         F: FnOnce(Task) -> Result<T>,
         T: Send,
     {
-        self.0.task_tree.spawn_sync(name, f, Some(self.0.id))
+        self.0.task_tree.spawn_sync(name.into(), f, Some(self.0.id))
     }
 
     pub fn data<D: Into<DataValue>>(&self, name: &str, data: D) {

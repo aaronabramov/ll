@@ -169,7 +169,7 @@ impl TermStatusInternal {
             for subtask_id in children_iter {
                 let mut new_depth = depth.clone();
                 // If we're not printing it, we're not adding the indent either
-                // so this tasks children will become children of the parnet task
+                // so this tasks children will become children of the parent task
                 if !dontprint {
                     new_depth.push(Some(subtask_id) != last_visible_child);
                 }
@@ -215,7 +215,7 @@ impl TermStatusInternal {
         */
 
         let indent = if let Some(last_indent) = depth.pop() {
-            // Wrost case utf8 symbol pre level is 4 bytes
+            // Worst case utf8 symbol pre level is 4 bytes
             let mut indent = String::with_capacity(4 * depth.len());
             for has_vertical_line in depth.into_iter() {
                 if has_vertical_line {

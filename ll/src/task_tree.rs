@@ -23,7 +23,7 @@ pub fn add_reporter(reporter: Arc<dyn Reporter>) {
 #[derive(Default)]
 pub struct TaskTree {
     pub(crate) tree_internal: RwLock<TaskTreeInternal>,
-    /// If true, it will block the current thread untill all task events are
+    /// If true, it will block the current thread until all task events are
     /// reported (e.g. written to STDOUT)
     force_flush: AtomicBool,
 }
@@ -414,11 +414,11 @@ impl TaskTreeInternal {
 
 impl TaskInternal {
     pub(crate) fn mark_done(&mut self, error_message: Option<String>) {
-        let tast_status = match error_message {
+        let task_status = match error_message {
             None => TaskResult::Success,
             Some(msg) => TaskResult::Failure(msg),
         };
-        self.status = TaskStatus::Finished(tast_status, SystemTime::now());
+        self.status = TaskStatus::Finished(task_status, SystemTime::now());
     }
 
     pub fn full_name(&self) -> String {

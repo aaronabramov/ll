@@ -184,20 +184,25 @@ impl TaskTree {
         result
     }
 
-    pub fn spawn_sync<F, T>(self: &Arc<Self>, name: &str, f: F, parent: Option<UniqID>) -> Result<T>
+    pub fn spawn_sync<F, T>(
+        self: &Arc<Self>,
+        name: String,
+        f: F,
+        parent: Option<UniqID>,
+    ) -> Result<T>
     where
         F: FnOnce(Task) -> Result<T>,
         T: Send,
     {
-        let task = self.pre_spawn(name.into(), parent);
+        let task = self.pre_spawn(name, parent);
         let id = task.0.id;
         let result = f(task);
         self.post_spawn(id, result)
     }
 
-    pub(crate) async fn spawn<F, FT, T, S: Into<String> + Clone>(
+    pub(crate) async fn spawn<F, FT, T>(
         self: &Arc<Self>,
-        name: S,
+        name: String,
         f: F,
         parent: Option<UniqID>,
     ) -> Result<T>
@@ -206,7 +211,7 @@ impl TaskTree {
         FT: Future<Output = Result<T>> + Send,
         T: Send,
     {
-        let task = self.pre_spawn(name.into(), parent);
+        let task = self.pre_spawn(name, parent);
         let id = task.0.id;
         let result = f(task).await;
         self.post_spawn(id, result)

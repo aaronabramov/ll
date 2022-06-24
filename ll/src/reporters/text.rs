@@ -15,13 +15,13 @@ pub struct StdioReporter {
     /// this flag will make it write to STDOUT instead
     pub use_stdout: bool,
     /// Report every time a new task is started as well, not only when tasks are
-    /// funished
+    /// finished
     pub log_task_start: bool,
     pub max_log_level: Level,
 }
 
 // Similar to STDOUT drain, but instead logs everything into a string
-// that it owns that can later be inspecetd/dumped.
+// that it owns that can later be inspected/dumped.
 #[derive(Clone)]
 pub struct StringReporter {
     pub output: Arc<Mutex<String>>,

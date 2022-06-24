@@ -4,7 +4,7 @@
 **ll** is a lightweight logging library. Its main focus is to provide the ability
 to manually instrument portions of code to track and log its execution.
 
-Instrumentation of the code is done by wrapping poritons of code into `Tasks`.
+Instrumentation of the code is done by wrapping parts of code into `Tasks`.
 Tasks emit a `start` event when the task is started and `end` event when it's finished.
 
 These events are consumed by `Reporters`. Multiple reporters can be used at the same time

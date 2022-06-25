@@ -287,10 +287,10 @@ fn format_data(task_internal: &TaskInternal) -> String {
 
 fn format_error(task_internal: &TaskInternal) -> String {
     let mut result = String::new();
-    if let Some(msg) = &task_internal.hide_errors {
-        return msg.to_string();
-    }
     if let TaskStatus::Finished(TaskResult::Failure(error_msg), _) = &task_internal.status {
+        if let Some(msg) = &task_internal.hide_errors {
+            return msg.dimmed().red().to_string();
+        }
         result.push_str("\n  |\n");
         let error_log = error_msg
             .split('\n')

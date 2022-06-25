@@ -331,6 +331,7 @@ async fn error_chain_test_error_formatter() -> Result<()> {
     let root = tt.create_task("root");
     let result = root.spawn_sync("top_level", |t| {
         t.hide_error_msg(None);
+        t.spawn_sync("random_stuff", |_| Ok(()))?;
         t.data("top_level_data", 5);
 
         t.spawn_sync("1_level", |t| {
@@ -366,8 +367,10 @@ Caused by:
         "
 [ ] | STARTING | root
 [ ] | STARTING | [ERR] root:top_level
+[ ] | STARTING | root:top_level:random_stuff
 [ ] | STARTING | [ERR] root:top_level:1_level
 [ ] | STARTING | [ERR] root:top_level:1_level:2_level
+[ ] root:top_level:random_stuff
 [ ] [ERR] root:top_level:1_level:2_level <error omitted>
 [ ] [ERR] root:top_level:1_level
   |      1_level_data: 9

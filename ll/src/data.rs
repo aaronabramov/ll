@@ -106,7 +106,7 @@ impl From<String> for DataValue {
     }
 }
 
-impl<'a> From<bool> for DataValue {
+impl From<bool> for DataValue {
     fn from(v: bool) -> Self {
         DataValue::String(format!("{}", v))
     }

@@ -71,6 +71,14 @@ impl Task {
         self.0.task_tree.add_data(self.0.id, name, data);
     }
 
+    /// Get a piece of previously set data or transitive data. This can be
+    /// useful if session/request tracking IDs need to be past to other loggers,
+    /// e.g. when shelling out to another process that needs to set the same
+    /// `session_id` inside so we can group the events together.
+    pub fn get_data(&self, name: &str) -> Option<DataValue> {
+        self.0.task_tree.get_data(self.0.id, name)
+    }
+
     pub fn data_transitive<D: Into<DataValue>>(&self, name: &str, data: D) {
         self.0
             .task_tree

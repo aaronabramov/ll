@@ -411,7 +411,26 @@ async fn logger_data_test() -> Result<()> {
     t3.spawn_sync("wont_print_request_id", |_| Ok(()))?;
 
     let t4 = t3.create("t4");
-    t4.spawn_sync("wont_print_request_id", |_| Ok(()))?;
+    t4.spawn_sync("wont_print_request_id", |task| {
+        task.data("hello", "meow");
+        snapshot!(
+            format!("{:?}", task.get_data("tree_transitive_data")),
+            "Some(Int(5))"
+        );
+        snapshot!(
+            format!("{:?}", task.get_data("hello")),
+            r#"Some(String("meow"))"#
+        );
+        snapshot!(
+            format!("{:?}", task.get_data("this_data_doesnt_exist")),
+            "None"
+        );
+        snapshot!(
+            task.get_data("tree_transitive_data").unwrap().to_string(),
+            "5"
+        );
+        Ok(())
+    })?;
 
     sleep().await;
     snapshot!(
@@ -437,6 +456,7 @@ async fn logger_data_test() -> Result<()> {
   |      process_id: 123
   |      tree_transitive_data: 5
 [ ] root:t1:t2:t3:t4:wont_print_request_id
+  |      hello: meow
   |      process_id: 123
   |      tree_transitive_data: 5
 

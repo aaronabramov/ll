@@ -282,6 +282,15 @@ impl TaskTree {
         }
     }
 
+    pub fn get_data<S: Into<String>>(&self, id: UniqID, key: S) -> Option<DataValue> {
+        let mut tree = self.tree_internal.write().unwrap();
+        if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
+            let all_data: BTreeMap<_, _> = task_internal.all_data().collect();
+            return all_data.get(&key.into()).map(|de| de.0.clone());
+        }
+        None
+    }
+
     pub(crate) fn add_data_transitive_for_task<S: Into<String>, D: Into<DataValue>>(
         &self,
         id: UniqID,

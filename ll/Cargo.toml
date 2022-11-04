@@ -1,6 +1,6 @@
 [package]
 name = "ll"
-version = "5.0.2"
+version = "6.0.0"
 edition = "2018"
 authors = ["Aaron Abramov <aaron@abramov.io>"]
 description = "rust logging library"

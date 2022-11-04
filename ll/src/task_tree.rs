@@ -595,7 +595,7 @@ impl TaskInternal {
             full_name.push(':');
         }
         full_name.push_str(&self.name);
-        format!("{}-{}", self.id, full_name)
+        full_name
     }
 
     pub fn all_data(

@@ -53,6 +53,7 @@ pub use task_tree::add_reporter;
 #[cfg(test)]
 mod tests;
 
+mod trace;
 pub use data::{Data, DataEntry, DataValue};
 pub use reporters::term_status::TermStatus;
 pub use reporters::text::StdioReporter;

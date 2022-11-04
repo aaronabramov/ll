@@ -11,6 +11,10 @@ impl UniqID {
     pub fn new() -> Self {
         UniqID(INCREMENTAL_UNIQ_ID.fetch_add(1, Ordering::SeqCst))
     }
+
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
 }
 
 impl fmt::Display for UniqID {

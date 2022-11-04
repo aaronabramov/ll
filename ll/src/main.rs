@@ -15,6 +15,7 @@ async fn main() {
     ll::reporters::term_status::show();
     ll::task_tree::TASK_TREE.set_force_flush(true);
 
+    root_task.start_trace();
     root_task
         .spawn("will_finish_fast #l3", |task| async move {
             tokio::spawn(async move {
@@ -43,7 +44,7 @@ async fn main() {
                     .spawn("detached_async_task", |task| async move {
                         for i in 0..=1000 {
                             task.progress(i, 1000);
-                            tokio::time::sleep(tokio::time::Duration::from_millis(8)).await;
+                            tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
                         }
                         Ok(())
                     })
@@ -112,6 +113,11 @@ async fn main() {
         .map_err(|e| println!("{:?}", e))
         .ok();
 
+    let trace = root_task.dump_trace().unwrap();
+
+    let chrome_trace = trace.to_chrome_trace().unwrap();
+
+    println!("{}", chrome_trace);
     drop(root_task);
     tokio::time::sleep(tokio::time::Duration::from_millis(10000)).await;
 }

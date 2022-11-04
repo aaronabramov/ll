@@ -140,13 +140,13 @@ impl TermStatusInternal {
 
     fn make_status_rows(&self) -> Result<Vec<String>> {
         let tree = self.task_tree.tree_internal.read().unwrap();
-        let child_to_parents = tree.child_to_parents();
+        let child_to_parent = tree.child_to_parent();
         let parent_to_children = tree.parent_to_children();
 
         let mut stack: Vec<(UniqID, Depth)> = tree
             .root_tasks()
             .iter()
-            .filter(|id| !child_to_parents.contains_key(id))
+            .filter(|id| !child_to_parent.contains_key(id))
             .map(|id| (*id, vec![]))
             .collect();
 
@@ -200,7 +200,9 @@ impl TermStatusInternal {
 
     fn should_print(&self, task: &TaskInternal) -> bool {
         let level = super::utils::parse_level(task);
-        !task.tags.contains(NOSTATUS_TAG) && (level <= self.max_log_level)
+        !task.tags.contains(NOSTATUS_TAG)
+            && (level <= self.max_log_level)
+            && !matches!(task.status, TaskStatus::Finished(_, _))
     }
 
     fn task_row(&self, task_internal: &TaskInternal, mut depth: Depth) -> Result<String> {

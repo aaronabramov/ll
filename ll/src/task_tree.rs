@@ -1,6 +1,7 @@
 use crate::data::{Data, DataEntry, DataValue};
 use crate::reporters::Reporter;
 use crate::task::{Task, TaskData};
+use crate::trace::{TaskTrace, Trace};
 use crate::uniq_id::UniqID;
 use anyhow::{Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -34,7 +35,7 @@ pub struct TaskTree {
 pub(crate) struct TaskTreeInternal {
     tasks_internal: BTreeMap<UniqID, TaskInternal>,
     parent_to_children: BTreeMap<UniqID, BTreeSet<UniqID>>,
-    child_to_parents: BTreeMap<UniqID, BTreeSet<UniqID>>,
+    child_to_parent: BTreeMap<UniqID, UniqID>,
     root_tasks: BTreeSet<UniqID>,
     reporters: Vec<Arc<dyn Reporter>>,
     tasks_marked_for_deletion: HashMap<UniqID, SystemTime>,
@@ -64,6 +65,11 @@ pub struct TaskInternal {
     pub progress: Option<(i64, i64)>,
     pub hide_errors: Option<Arc<String>>,
     pub attach_transitive_data_to_errors: bool,
+    /// Don't garbage collect the subtree of tasks until this task is marked
+    /// finished. This is for the cases when we need to collect the trace for a
+    /// task. We wait for the execution to finish for everything and then dump
+    /// the whole tree in a JSON file.
+    pub keep_subtree_until_finished: bool,
 }
 
 #[derive(Clone)]
@@ -84,7 +90,7 @@ impl TaskTree {
             tree_internal: RwLock::new(TaskTreeInternal {
                 tasks_internal: BTreeMap::new(),
                 parent_to_children: BTreeMap::new(),
-                child_to_parents: BTreeMap::new(),
+                child_to_parent: BTreeMap::new(),
                 root_tasks: BTreeSet::new(),
                 reporters: vec![],
                 tasks_marked_for_deletion: HashMap::new(),
@@ -238,10 +244,12 @@ impl TaskTree {
                 .entry(parent_id)
                 .or_insert_with(BTreeSet::new)
                 .insert(id);
-            tree.child_to_parents
-                .entry(id)
-                .or_insert_with(BTreeSet::new)
-                .insert(parent_id);
+            if let Some(existing) = tree.child_to_parent.insert(id, parent_id) {
+                panic!(
+                    "tasks must have only one parent. id {}, new parent {}, existing parent {}",
+                    id, parent_id, existing
+                )
+            }
         } else {
             tree.root_tasks.insert(id);
         }
@@ -258,6 +266,7 @@ impl TaskTree {
             progress: None,
             hide_errors: tree.hide_errors_default_msg.clone(),
             attach_transitive_data_to_errors: tree.attach_transitive_data_to_errors_default,
+            keep_subtree_until_finished: false,
         };
 
         tree.tasks_internal.insert(id, task_internal);
@@ -363,6 +372,55 @@ impl TaskTree {
         }
     }
 
+    pub fn start_trace(&self, id: UniqID) {
+        let mut tree = self.tree_internal.write().unwrap();
+        if let Some(task_internal) = tree.tasks_internal.get_mut(&id) {
+            task_internal.keep_subtree_until_finished = true;
+        }
+    }
+
+    pub fn dump_trace(&self, id: UniqID) -> Result<Trace> {
+        let tree = self.tree_internal.write().unwrap();
+
+        let mut trace = Trace {
+            root_id: id.as_u64(),
+            tasks: BTreeMap::new(),
+        };
+        let mut stack = vec![id];
+        while let Some(next) = stack.pop() {
+            let task = tree
+                .tasks_internal
+                .get(&next)
+                .with_context(|| format!("lost task. ID {}", next))?;
+
+            let mut children = BTreeSet::new();
+            if let Some(children_ids) = tree.parent_to_children.get(&next) {
+                for child_id in children_ids {
+                    children.insert(child_id.as_u64());
+                    stack.push(*child_id);
+                }
+            }
+
+            let task_trace = TaskTrace {
+                name: task.full_name(),
+                start: task.started_at,
+                finished_at: if let TaskStatus::Finished(_, finished_at) = task.status {
+                    Some(finished_at)
+                } else {
+                    None
+                },
+                data: task
+                    .all_data()
+                    .map(|(k, v)| (k.to_string(), v.0.to_string()))
+                    .collect(),
+                children,
+            };
+
+            trace.tasks.insert(next.as_u64(), task_trace);
+        }
+        Ok(trace)
+    }
+
     fn get_cloned_task(&self, id: UniqID) -> Option<TaskInternal> {
         let tree = self.tree_internal.read().unwrap();
         tree.get_task(id).ok().cloned()
@@ -401,8 +459,8 @@ impl TaskTreeInternal {
         &self.root_tasks
     }
 
-    pub fn child_to_parents(&self) -> &BTreeMap<UniqID, BTreeSet<UniqID>> {
-        &self.child_to_parents
+    pub fn child_to_parent(&self) -> &BTreeMap<UniqID, UniqID> {
+        &self.child_to_parent
     }
 
     pub fn parent_to_children(&self) -> &BTreeMap<UniqID, BTreeSet<UniqID>> {
@@ -410,6 +468,28 @@ impl TaskTreeInternal {
     }
 
     fn mark_for_gc(&mut self, id: UniqID) {
+        let mut is_held = false;
+        let mut parent = Some(id);
+        let mut path = vec![];
+
+        while let Some(next_parent) = &parent {
+            if let Ok(task) = self.get_task(*next_parent) {
+                let should_hold = task.keep_subtree_until_finished
+                    && !matches!(task.status, TaskStatus::Finished(_, _));
+
+                path.push(format!("{} / {}", task.full_name(), should_hold));
+                if should_hold {
+                    is_held = true;
+                    break;
+                }
+                parent = self.child_to_parent.get(next_parent).copied();
+            }
+        }
+
+        if is_held {
+            return;
+        }
+
         let mut stack = vec![id];
 
         let mut tasks_to_finished_status = BTreeMap::new();
@@ -438,9 +518,8 @@ impl TaskTreeInternal {
             // This sub branch might have been holding other parent branches that
             // weren't able to be garbage collected because of this subtree. we'll go
             // level up and perform the same logic.
-            let parents = self.child_to_parents.get(&id).cloned().unwrap_or_default();
-            for parent_id in parents {
-                self.mark_for_gc(parent_id);
+            if let Some(parent_id) = self.child_to_parent.get(&id) {
+                self.mark_for_gc(*parent_id);
             }
         }
     }
@@ -454,16 +533,13 @@ impl TaskTreeInternal {
                 }
             }
         }
-
         for id in will_delete {
             self.tasks_internal.remove(&id);
             self.parent_to_children.remove(&id);
             self.root_tasks.remove(&id);
-            if let Some(parents) = self.child_to_parents.remove(&id) {
-                for parent in parents {
-                    if let Some(children) = self.parent_to_children.get_mut(&parent) {
-                        children.remove(&id);
-                    }
+            if let Some(parent_id) = self.child_to_parent.remove(&id) {
+                if let Some(children) = self.parent_to_children.get_mut(&parent_id) {
+                    children.remove(&id);
                 }
             }
             self.tasks_marked_for_deletion.remove(&id);
@@ -519,7 +595,7 @@ impl TaskInternal {
             full_name.push(':');
         }
         full_name.push_str(&self.name);
-        full_name
+        format!("{}-{}", self.id, full_name)
     }
 
     pub fn all_data(

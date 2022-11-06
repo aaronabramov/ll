@@ -50,6 +50,7 @@ pub(crate) struct TaskTreeInternal {
 #[derive(Clone)]
 pub struct TaskInternal {
     pub id: UniqID,
+    pub parent_id: Option<UniqID>,
     pub name: String,
     pub parent_names: Vec<String>,
     pub started_at: SystemTime,
@@ -138,7 +139,7 @@ impl TaskTree {
 
     fn pre_spawn(self: &Arc<Self>, name: String, parent: Option<UniqID>) -> Task {
         let task = Task(Arc::new(TaskData {
-            id: self.create_task_internal(&name, parent),
+            id: self.create_task_internal(name, parent),
             task_tree: self.clone(),
             mark_done_on_drop: false,
         }));
@@ -248,6 +249,7 @@ impl TaskTree {
 
         let task_internal = TaskInternal {
             status: TaskStatus::Running,
+            parent_id: parent,
             name,
             parent_names,
             id,

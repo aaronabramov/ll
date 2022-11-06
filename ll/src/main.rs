@@ -14,6 +14,8 @@ async fn main() {
     let root_task = Task::create_new("root #nostatus #l0");
     ll::reporters::term_status::show();
     ll::task_tree::TASK_TREE.set_force_flush(true);
+    let trace = Arc::new(ll::reporters::trace::TraceReporter::new());
+    ll::add_reporter(trace.clone());
 
     root_task
         .spawn("will_finish_fast #l3", |task| async move {
@@ -113,5 +115,12 @@ async fn main() {
         .ok();
 
     drop(root_task);
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    let trace_str = trace.take();
+    println!("{}", &trace_str);
+    std::fs::write("/tmp/trace.jsonl", &trace_str).unwrap();
+
     tokio::time::sleep(tokio::time::Duration::from_millis(10000)).await;
 }

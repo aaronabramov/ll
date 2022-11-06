@@ -1,0 +1,41 @@
+html,
+body {
+    height: 100%;
+}
+
+body {
+    background-color: #1e1e24;
+    font-family: 'Fira Sans Extra Condensed', sans-serif;
+    color: #ffffff;
+    margin: 0;
+    padding: 0;
+}
+
+a {
+    color: #6631F7;
+}
+
+#root {
+    display: flex;
+    height: 100%;
+    /* align-items: center; */
+    justify-content: center;
+}
+
+
+.ll-table {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    margin: 10px;
+}
+
+.ll-table-row {
+    display: flex;
+    flex-direction: row;
+    background-color: #2a2a33;
+    width: 100%;
+    margin-bottom: 1px;
+    padding: 3px 5px;
+}

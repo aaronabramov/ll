@@ -1,6 +1,5 @@
 use crate::data::DataValue;
 use crate::task_tree::{TaskTree, TASK_TREE};
-use crate::trace::Trace;
 use crate::uniq_id::UniqID;
 use anyhow::Result;
 use std::future::Future;
@@ -113,14 +112,6 @@ impl Task {
         self.0
             .task_tree
             .attach_transitive_data_to_errors_for_task(self.0.id, val);
-    }
-
-    pub fn start_trace(&self) {
-        self.0.task_tree.start_trace(self.0.id);
-    }
-
-    pub fn dump_trace(&self) -> Result<Trace> {
-        self.0.task_tree.dump_trace(self.0.id)
     }
 }
 

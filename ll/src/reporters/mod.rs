@@ -1,6 +1,7 @@
 pub mod level;
 pub mod term_status;
 pub mod text;
+pub mod trace;
 pub mod utils;
 
 pub use level::Level;
